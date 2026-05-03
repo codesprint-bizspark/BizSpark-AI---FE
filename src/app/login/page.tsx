@@ -3,11 +3,11 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Zap, Loader2, Mail, Lock, Sparkles } from "lucide-react"
+import { Zap, Loader2, Mail, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { apiClient } from "@/lib/api-client"
 
@@ -15,46 +15,23 @@ export default function LoginPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    email: "",
-    password: ""
-  })
-
-  const performLoginRedirect = () => {
-    // Navigate straight to dashboard. Real API fetching happens there.
-    router.push("/dashboard")
-  }
+  const [email, setEmail]       = useState("")
+  const [password, setPassword] = useState("")
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData.email || !formData.password) {
-      toast({
-        title: "Error",
-        description: "Please enter both email and password.",
-        variant: "destructive"
-      })
-      return
-    }
-
+    if (!email || !password) return
     setIsLoading(true)
-
     try {
-      const data = await apiClient.post('/auth/login', formData)
+      const data = await apiClient.post('/auth/login', { email, password })
       apiClient.setAuthToken(data.access_token, data.user)
-
-      toast({
-        title: "Success",
-        description: "Welcome back to BizSpark AI!"
-      })
-
-      performLoginRedirect()
+      router.replace("/dashboard")
     } catch (error: any) {
       toast({
-        title: "Login Failed",
+        title: "Login failed",
         description: error.message || "Invalid email or password.",
-        variant: "destructive"
+        variant: "destructive",
       })
-    } finally {
       setIsLoading(false)
     }
   }
@@ -62,7 +39,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F1F0F5] px-6">
       <div className="w-full max-w-[400px] space-y-8">
-        <div className="flex flex-col items-center gap-2 mb-8">
+        <div className="flex flex-col items-center gap-2">
           <Link href="/" className="flex items-center gap-2 font-bold text-3xl text-primary">
             <Zap className="fill-primary" size={32} />
             <span className="font-headline tracking-tight">BizSpark AI</span>
@@ -73,9 +50,7 @@ export default function LoginPage() {
         <Card className="border-2 shadow-xl">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl font-bold">Log in</CardTitle>
-            <CardDescription>
-              Enter your email below to access your account
-            </CardDescription>
+            <CardDescription>Enter your email and password to continue</CardDescription>
           </CardHeader>
           <form onSubmit={handleLogin}>
             <CardContent className="space-y-4">
@@ -88,31 +63,39 @@ export default function LoginPage() {
                     type="email"
                     placeholder="name@example.com"
                     className="pl-10"
-                    value={formData.email}
-                    onChange={e => setFormData({ ...formData, email: e.target.value })}
+                    autoFocus
+                    autoComplete="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    disabled={isLoading}
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
-                  <Link href="#" className="text-xs text-primary hover:underline">Forgot password?</Link>
-                </div>
+                <Label htmlFor="password">Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="password"
                     type="password"
                     className="pl-10"
-                    value={formData.password}
-                    onChange={e => setFormData({ ...formData, password: e.target.value })}
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    disabled={isLoading}
                   />
                 </div>
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full h-11" disabled={isLoading}>
-                {isLoading ? <Loader2 className="animate-spin mr-2" /> : "Sign In"}
+              <Button
+                type="submit"
+                className="w-full h-11"
+                disabled={isLoading || !email || !password}
+              >
+                {isLoading
+                  ? <><Loader2 className="animate-spin mr-2 size-4" /> Signing in…</>
+                  : "Sign In"}
               </Button>
             </CardFooter>
           </form>
