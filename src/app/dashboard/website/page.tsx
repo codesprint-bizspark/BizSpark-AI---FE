@@ -194,6 +194,7 @@ export default function WebsiteManagement() {
   // ── APPROVE ──────────────────────────────────────────────────────────────────
   if (generatedContent && deployStatus === "PENDING_APPROVAL") {
     const g = generatedContent
+    const c = g.content ?? {}
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -201,7 +202,7 @@ export default function WebsiteManagement() {
             <h2 className="text-3xl font-bold font-headline flex items-center gap-2">
               <Sparkles size={22} className="text-primary" /> Ready to Publish
             </h2>
-            <p className="text-muted-foreground mt-1">AI has written your website. Review the preview below, then publish.</p>
+            <p className="text-muted-foreground mt-1">Review everything AI generated before publishing to your storefront.</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handleReject} disabled={isApproving}>
@@ -215,38 +216,114 @@ export default function WebsiteManagement() {
           </div>
         </div>
 
-        {/* Preview card */}
         <div className="grid sm:grid-cols-2 gap-4">
+          {/* Branding */}
           <Card className="border-2">
             <CardHeader className="pb-2 pt-4 px-5">
               <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Branding</CardTitle>
             </CardHeader>
-            <CardContent className="px-5 pb-5 space-y-2">
+            <CardContent className="px-5 pb-5 space-y-3">
               <div className="flex items-center gap-2">
                 <div className="size-5 rounded-full border shrink-0" style={{ backgroundColor: g.primaryColor ?? "#2563eb" }} />
+                {g.secondaryColor && <div className="size-5 rounded-full border shrink-0" style={{ backgroundColor: g.secondaryColor }} />}
                 <span className="font-bold text-sm">{g.businessName}</span>
               </div>
               {g.tagline && <p className="text-xs text-muted-foreground italic">"{g.tagline}"</p>}
+              <div className="flex gap-4 text-xs text-muted-foreground">
+                {g.primaryColor   && <span>Primary: <span className="font-mono">{g.primaryColor}</span></span>}
+                {g.secondaryColor && <span>Secondary: <span className="font-mono">{g.secondaryColor}</span></span>}
+              </div>
             </CardContent>
           </Card>
 
-          <Card className="border-2">
-            <CardHeader className="pb-2 pt-4 px-5">
-              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Hero</CardTitle>
-            </CardHeader>
-            <CardContent className="px-5 pb-5 space-y-1">
-              <p className="font-semibold text-sm leading-snug">{g.content?.hero?.title}</p>
-              <p className="text-xs text-muted-foreground line-clamp-2">{g.content?.hero?.subtitle}</p>
-            </CardContent>
-          </Card>
-
-          {g.content?.about?.text && (
-            <Card className="border-2 sm:col-span-2">
+          {/* Announcement */}
+          {c.announcement?.text && (
+            <Card className="border-2">
               <CardHeader className="pb-2 pt-4 px-5">
-                <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">About</CardTitle>
+                <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Announcement Banner</CardTitle>
               </CardHeader>
               <CardContent className="px-5 pb-5">
-                <p className="text-sm text-muted-foreground line-clamp-3">{g.content.about.text}</p>
+                <p className="text-sm">{c.announcement.text}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Hero */}
+          <Card className="border-2">
+            <CardHeader className="pb-2 pt-4 px-5">
+              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Hero Section</CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 pb-5 space-y-1.5">
+              <p className="font-bold text-sm leading-snug">{c.hero?.title}</p>
+              <p className="text-xs text-muted-foreground">{c.hero?.subtitle}</p>
+              {c.hero?.ctaText && (
+                <span className="inline-block mt-1 text-xs bg-primary/10 text-primary font-medium px-2 py-0.5 rounded">
+                  CTA: {c.hero.ctaText}
+                </span>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* About */}
+          {c.about && (
+            <Card className="border-2">
+              <CardHeader className="pb-2 pt-4 px-5">
+                <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">About Section</CardTitle>
+              </CardHeader>
+              <CardContent className="px-5 pb-5 space-y-1.5">
+                {c.about.title && <p className="font-semibold text-sm">{c.about.title}</p>}
+                <p className="text-xs text-muted-foreground">{c.about.text}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Features */}
+          {c.features?.length > 0 && (
+            <Card className="border-2 sm:col-span-2">
+              <CardHeader className="pb-2 pt-4 px-5">
+                <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Features ({c.features.length})</CardTitle>
+              </CardHeader>
+              <CardContent className="px-5 pb-5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {c.features.map((f: any, i: number) => (
+                    <div key={i} className="rounded-lg border bg-slate-50 px-3 py-2.5 space-y-0.5">
+                      <p className="text-xs font-semibold text-slate-700">{f.title}</p>
+                      <p className="text-xs text-muted-foreground">{f.description}</p>
+                      <span className="text-[10px] font-mono text-slate-400">{f.icon}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* SEO */}
+          {c.seo && (
+            <Card className="border-2">
+              <CardHeader className="pb-2 pt-4 px-5">
+                <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">SEO</CardTitle>
+              </CardHeader>
+              <CardContent className="px-5 pb-5 space-y-2">
+                {c.seo.metaDescription && <p className="text-xs text-muted-foreground">{c.seo.metaDescription}</p>}
+                {c.seo.keywords && (
+                  <div className="flex flex-wrap gap-1">
+                    {c.seo.keywords.split(",").map((k: string) => (
+                      <span key={k} className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{k.trim()}</span>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Footer / Contact */}
+          {c.footer?.contactEmail && (
+            <Card className="border-2">
+              <CardHeader className="pb-2 pt-4 px-5">
+                <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Contact</CardTitle>
+              </CardHeader>
+              <CardContent className="px-5 pb-5">
+                <p className="text-sm font-mono">{c.footer.contactEmail}</p>
               </CardContent>
             </Card>
           )}
