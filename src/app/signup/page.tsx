@@ -39,11 +39,11 @@ export default function SignupPage() {
             apiClient.setAuthToken(data.access_token, data.user)
 
             toast({
-                title: "Success",
-                description: "Account created successfully! Let's set up your business."
+                title: "Welcome to BizSpark AI",
+                description: "Account created. You can create your first business from the dashboard."
             })
 
-            router.push("/setup")
+            router.push("/dashboard")
         } catch (error: any) {
             toast({
                 title: "Registration Failed",
