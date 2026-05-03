@@ -114,8 +114,8 @@ export default function WebsiteManagement() {
     setIsApproving(true)
     try {
       const res = await apiClient.post(`/agents/tasks/${currentTaskId}/approve`, { content: editedContent })
-      // Credentials come from approve if just provisioned, or from localStorage if created earlier
-      const creds = res.data?.adminCredentials
+      // approve returns { success, message, adminCredentials } — apiClient gives raw JSON (no .data wrapper)
+      const creds = res.adminCredentials
         ?? JSON.parse(localStorage.getItem(`admin_creds_${activeBiz.id}`) || 'null')
       if (creds) setAdminCredentials(creds)
       setIsPublished(true)
