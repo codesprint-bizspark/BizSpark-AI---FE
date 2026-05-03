@@ -25,6 +25,7 @@ import {
 import { Plus, Building2, ChevronDown, LogOut } from "lucide-react"
 import Link from "next/link"
 import { apiClient } from "@/lib/api-client"
+import { CreateBusinessDialog } from "@/components/create-business-dialog"
 
 export default function DashboardLayout({
   children,
@@ -37,6 +38,7 @@ export default function DashboardLayout({
   const [activeId, setActiveId] = useState<string>("")
   const [isLoaded, setIsLoaded] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
 
   useEffect(() => {
     // Also load user info
@@ -50,11 +52,6 @@ export default function DashboardLayout({
         const res = await apiClient.get('/business')
         const list = res.data || []
         setBusinesses(list)
-
-        if (list.length === 0 && pathname !== "/setup") {
-          router.push("/setup")
-          return
-        }
 
         if (list.length > 0) {
           let currentId = localStorage.getItem("active_biz_id") || ""
@@ -72,9 +69,10 @@ export default function DashboardLayout({
 
     fetchBusinesses()
   }, [pathname, router])
+
   const handleSwitch = (id: string) => {
     if (id === "new_business") {
-      router.push("/setup")
+      setShowCreateDialog(true)
       return
     }
     localStorage.setItem("active_biz_id", id)
@@ -164,11 +162,27 @@ export default function DashboardLayout({
             </div>
           </header>
           <main className="flex-1 overflow-auto p-8">
-            {children}
+            {businesses.length === 0 ? (
+              <div className="h-full min-h-[60vh] flex flex-col items-center justify-center text-center px-6">
+                <div className="size-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
+                  <Building2 className="text-primary" size={28} />
+                </div>
+                <h2 className="text-2xl font-bold mb-2">No businesses yet</h2>
+                <p className="text-muted-foreground max-w-md mb-6">
+                  Create your first business to start managing its website, products, and social presence.
+                </p>
+                <Button size="lg" onClick={() => setShowCreateDialog(true)} className="gap-2">
+                  <Plus size={18} /> Create your first business
+                </Button>
+              </div>
+            ) : (
+              children
+            )}
           </main>
         </div>
       </SidebarInset>
       <Toaster />
+      <CreateBusinessDialog open={showCreateDialog} onOpenChange={setShowCreateDialog} />
     </SidebarProvider>
   )
 }
