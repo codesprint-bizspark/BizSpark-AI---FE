@@ -74,7 +74,7 @@ export default function WebsiteManagement() {
           toast({ title: "Generation failed", description: task.outputData?.error || "Unknown error", variant: "destructive" })
         }
       } catch (e) { console.error(e) }
-    }, 1000)
+    }, 500)
   }
 
   const handleGenerate = async () => {
