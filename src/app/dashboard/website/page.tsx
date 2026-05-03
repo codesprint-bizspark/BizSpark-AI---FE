@@ -1,571 +1,380 @@
-
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import { Monitor, Smartphone, Globe, ExternalLink, RefreshCw, Sparkles, Check, Wand2, Sparkle } from "lucide-react"
+import { ExternalLink, RefreshCw, Sparkles, Check, Wand2, Loader2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { cn } from "@/lib/utils"
-import { apiClient } from "@/lib/api-client"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { cn } from "@/lib/utils"
+import { apiClient } from "@/lib/api-client"
 import { useToast } from "@/hooks/use-toast"
-import { Store, Upload } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+
+const TONES = [
+  { value: "professional", label: "Professional" },
+  { value: "friendly", label: "Friendly" },
+  { value: "bold", label: "Bold" },
+  { value: "minimal", label: "Minimal" },
+]
 
 export default function WebsiteManagement() {
   const { toast } = useToast()
   const [activeBiz, setActiveBiz] = useState<any>(null)
-  const [view, setView] = useState("desktop")
-  const [isPublishing, setIsPublishing] = useState(false)
-  const [isPublished, setIsPublished] = useState(false)
   const [deployStatus, setDeployStatus] = useState<string | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
-  const [stepIndex, setStepIndex] = useState(0)
-  const [completedSetup, setCompletedSetup] = useState(false)
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null)
+  const [generatedContent, setGeneratedContent] = useState<any>(null)
+  const [editedContent, setEditedContent] = useState<any>(null)
+  const [isApproving, setIsApproving] = useState(false)
+  const [isPublished, setIsPublished] = useState(false)
 
-  const pollingIntervalObj = useRef<NodeJS.Timeout | null>(null)
+  // Intake form state
+  const [tone, setTone] = useState("professional")
+  const [primaryColor, setPrimaryColor] = useState("#2563eb")
+  const [isGenerating, setIsGenerating] = useState(false)
 
-  useEffect(() => {
-    return () => {
-      // Cleanup interval if unmounting
-      if (pollingIntervalObj.current) clearInterval(pollingIntervalObj.current)
-    }
-  }, [])
-
-  const [templates, setTemplates] = useState<any[]>([])
-  const [templateId, setTemplateId] = useState<string>("")
-  const [cmsData, setCmsData] = useState<Record<string, any>>({})
+  const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     const fetchBiz = async () => {
       const activeId = localStorage.getItem("active_biz_id")
-      if (activeId) {
-        try {
-          const res = await apiClient.get(`/business/${activeId}`)
-          if (res.data) {
-            setActiveBiz(res.data)
-            if (res.data.websites && res.data.websites.length > 0) {
-              const website = res.data.websites[0]
-              setTemplateId(website.templateId)
-              setCmsData(website.cmsData || {})
-            }
-            return
+      if (!activeId) return
+      try {
+        const res = await apiClient.get(`/business/${activeId}`)
+        if (res.data) {
+          setActiveBiz(res.data)
+          // Restore published state if this business already has a website
+          if (res.data.websites?.length > 0) {
+            setIsPublished(true)
           }
-        } catch (e) {
-          console.error(e)
         }
-      }
-
-      setActiveBiz({
-        name: "My Business",
-        html: `<div style="padding: 40px; text-align: center;"><h1>No website found.</h1></div>`
-      })
+      } catch (e) { console.error(e) }
     }
     fetchBiz()
-
-    const fetchTemplates = async () => {
-      try {
-        const res = await apiClient.get('/templates')
-        if (res.data) setTemplates(res.data)
-      } catch (e) {
-        console.error("Failed to load templates", e)
-      }
-    }
-    fetchTemplates()
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current) }
   }, [])
 
-  const handleSaveConfig = async () => {
-    setIsSaving(true)
-    try {
-      await apiClient.post(`/business/${activeBiz.id}/website`, {
-        templateId,
-        cmsData
-      })
-      toast({ title: "Configuration Saved", description: "Your Website Data has been saved securely to the database." })
-      return true
-    } catch (e: any) {
-      toast({ title: "Failed to save", variant: "destructive" })
-      return false
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const pollTaskStatus = (taskId: string) => {
-    setIsPublishing(true)
-    setDeployStatus("QUEUED")
-
-    pollingIntervalObj.current = setInterval(async () => {
+  const startPolling = (taskId: string) => {
+    pollingRef.current = setInterval(async () => {
       try {
         const res = await apiClient.get(`/agents/tasks/${taskId}`)
-        if (res.data) {
-          const status = res.data.status
-          setDeployStatus(status)
+        const task = res.data
+        if (!task) return
+        setDeployStatus(task.status)
 
-          if (status === 'COMPLETED' || status === 'FAILED') {
-            if (pollingIntervalObj.current) clearInterval(pollingIntervalObj.current)
-            setIsPublishing(false)
-            setIsPublished(status === 'COMPLETED')
-
-            if (status === 'COMPLETED') {
-              toast({ title: "Build Complete!", description: "AI generation has finished successfully." })
-            } else {
-              toast({ title: "Build Failed", description: "AI generation encountered an error.", variant: "destructive" })
-            }
-          }
+        if (task.status === "PENDING_APPROVAL") {
+          clearInterval(pollingRef.current!)
+          setIsGenerating(false)
+          const content = task.outputData?.generatedContent
+          setGeneratedContent(content)
+          setEditedContent(content)
+          toast({ title: "AI content ready!", description: "Review and approve your website below." })
         }
-      } catch (e) {
-        console.error("Polling error", e)
-      }
-    }, 1000)
+        if (task.status === "FAILED") {
+          clearInterval(pollingRef.current!)
+          setIsGenerating(false)
+          toast({ title: "Generation failed", description: task.outputData?.error || "Unknown error", variant: "destructive" })
+        }
+      } catch (e) { console.error(e) }
+    }, 2000)
   }
 
-  const handlePublish = async () => {
-    setIsPublishing(true)
-    try {
-      const deployRes = await apiClient.post(`/business/${activeBiz.id}/website/deploy`, {})
-      const taskId = deployRes?.data?.taskId || deployRes?.data?.data?.taskId
+  const handleGenerate = async () => {
+    if (!activeBiz) return
+    setIsGenerating(true)
+    setGeneratedContent(null)
+    setEditedContent(null)
+    setIsPublished(false)
 
-      if (taskId) {
-        toast({ title: "Build Started!", description: "AI is generating your website on the server." })
-        pollTaskStatus(taskId)
-      } else {
-        toast({ title: "Build Started", description: "Deployment triggered, but could not track task status." })
-        setIsPublishing(false)
-        setIsPublished(true)
-      }
+    try {
+      // Save minimal config first
+      await apiClient.post(`/business/${activeBiz.id}/website`, {
+        cmsData: { "brand.primaryColor": primaryColor }
+      })
+
+      // Trigger deploy with tone
+      const res = await apiClient.post(`/business/${activeBiz.id}/website/deploy`, { tone })
+      const taskId = res?.data?.taskId
+      if (!taskId) throw new Error("No taskId returned")
+
+      setCurrentTaskId(taskId)
+      setDeployStatus("QUEUED")
+      startPolling(taskId)
     } catch (e: any) {
-      toast({ title: "Deployment failed", variant: "destructive" })
-      setIsPublishing(false)
+      setIsGenerating(false)
+      toast({ title: "Failed to start generation", description: e.message, variant: "destructive" })
     }
+  }
+
+  const handleApprove = async () => {
+    if (!currentTaskId || !editedContent) return
+    setIsApproving(true)
+    try {
+      await apiClient.post(`/agents/tasks/${currentTaskId}/approve`, { content: editedContent })
+      setIsPublished(true)
+      setDeployStatus("COMPLETED")
+      toast({ title: "Website Published!", description: "Your site is now live." })
+    } catch (e: any) {
+      toast({ title: "Publish failed", description: e.message, variant: "destructive" })
+    } finally {
+      setIsApproving(false)
+    }
+  }
+
+  const handleReject = async () => {
+    if (!currentTaskId) return
+    try {
+      await apiClient.post(`/agents/tasks/${currentTaskId}/reject`, {})
+      setGeneratedContent(null)
+      setEditedContent(null)
+      setDeployStatus(null)
+      setCurrentTaskId(null)
+      toast({ title: "Rejected", description: "Generate again with different settings." })
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" })
+    }
+  }
+
+  const updateField = (path: string, value: string) => {
+    const keys = path.split(".")
+    setEditedContent((prev: any) => {
+      const next = { ...prev }
+      let cur = next
+      for (let i = 0; i < keys.length - 1; i++) {
+        cur[keys[i]] = { ...cur[keys[i]] }
+        cur = cur[keys[i]]
+      }
+      cur[keys[keys.length - 1]] = value
+      return next
+    })
   }
 
   if (!activeBiz) return null
 
-  const steps = [
-    {
-      id: "template",
-      title: "Choose a template",
-      description: "Pick a starting layout that fits your business."
-    },
-    {
-      id: "brand",
-      title: "Branding",
-      description: "Set your primary colors and look & feel."
-    },
-    {
-      id: "content",
-      title: "Content",
-      description: "Add your headline, about, and core sections."
-    },
-    {
-      id: "media",
-      title: "Images",
-      description: "Upload or link images for your site."
-    },
-    {
-      id: "review",
-      title: "Review & publish",
-      description: "Preview the site and publish when ready."
-    }
-  ]
-
-  const selectedTemplate = templates.find(t => t.id === templateId)
-  const primaryWebsite = Array.isArray(activeBiz.websites) ? activeBiz.websites[0] : null
-  const hasStoredConfiguration = !!(primaryWebsite?.templateId && String(primaryWebsite.templateId).trim().length > 0)
-  const sections = selectedTemplate?.cmsSchema?.sections || []
-  const step = steps[stepIndex]?.id || "template"
-  const isFirstStep = stepIndex === 0
-  const isLastStep = stepIndex === steps.length - 1
-  const needsOnboarding = !hasStoredConfiguration && !completedSetup
-
-  const fieldTypesByStep: Record<string, string[]> = {
-    brand: ["COLOR"],
-    content: ["TEXT"],
-    media: ["IMAGE_URL"]
+  // ── GENERATING STATE ──
+  if (isGenerating) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-4 text-center">
+        <div className="size-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+          <Sparkles className="text-primary animate-pulse" size={28} />
+        </div>
+        <h2 className="text-2xl font-bold">Generating your website…</h2>
+        <p className="text-muted-foreground max-w-sm">
+          Gemini AI is writing professional copy for <strong>{activeBiz.name}</strong>. This takes about 10–20 seconds.
+        </p>
+        <Badge variant="outline" className="text-xs uppercase tracking-wide">
+          {deployStatus === "PROCESSING" ? "AI is writing..." : "Queued..."}
+        </Badge>
+      </div>
+    )
   }
 
-  const getSectionFields = (section: any) => {
-    if (!section?.fields?.length) return []
-    const types = fieldTypesByStep[step] || []
-    if (!types.length) return []
-    return section.fields.filter((field: any) => types.includes(field.type))
-  }
-
-  if (needsOnboarding) {
+  // ── REVIEW STATE ──
+  if (generatedContent && editedContent && deployStatus === "PENDING_APPROVAL") {
     return (
       <div className="h-full flex flex-col space-y-6">
-        <div>
-          <h2 className="text-3xl font-bold font-headline">Create your website</h2>
-          <p className="text-muted-foreground mt-1">
-            Let’s set up your site in a few simple steps. You can edit everything later.
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold font-headline flex items-center gap-2">
+              <Sparkles size={24} className="text-primary" /> AI Generated Content
+            </h2>
+            <p className="text-muted-foreground mt-1">Review, edit if needed, then approve to publish.</p>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={handleReject} disabled={isApproving}>
+              Reject & Redo
+            </Button>
+            <Button onClick={handleApprove} disabled={isApproving} className="gap-2">
+              {isApproving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+              Approve & Publish
+            </Button>
+          </div>
         </div>
 
-        <Card className="border">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Wand2 size={18} /> Step {stepIndex + 1} of {steps.length}: {steps[stepIndex]?.title}
-            </CardTitle>
-            <CardDescription>{steps[stepIndex]?.description}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="h-2 flex-1 rounded-full bg-slate-100">
-                <div
-                  className="h-2 rounded-full bg-primary transition-all"
-                  style={{ width: `${((stepIndex + 1) / steps.length) * 100}%` }}
-                />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Branding */}
+          <Card>
+            <CardHeader><CardTitle className="text-base">Branding</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <Label className="text-xs">Business Name</Label>
+                <Input value={editedContent.businessName || ""} onChange={e => updateField("businessName", e.target.value)} />
               </div>
-              <div className="text-xs text-muted-foreground">
-                {stepIndex + 1}/{steps.length}
+              <div className="space-y-1">
+                <Label className="text-xs">Tagline</Label>
+                <Input value={editedContent.tagline || ""} onChange={e => updateField("tagline", e.target.value)} />
               </div>
-            </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Primary Color</Label>
+                  <div className="flex gap-2 items-center">
+                    <input type="color" className="size-8 rounded cursor-pointer border" value={editedContent.primaryColor || "#2563eb"} onChange={e => updateField("primaryColor", e.target.value)} />
+                    <Input className="h-8 text-xs" value={editedContent.primaryColor || ""} onChange={e => updateField("primaryColor", e.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Secondary Color</Label>
+                  <div className="flex gap-2 items-center">
+                    <input type="color" className="size-8 rounded cursor-pointer border" value={editedContent.secondaryColor || "#1e40af"} onChange={e => updateField("secondaryColor", e.target.value)} />
+                    <Input className="h-8 text-xs" value={editedContent.secondaryColor || ""} onChange={e => updateField("secondaryColor", e.target.value)} />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-            {step === "template" && (
-              <div className="space-y-3">
-                <Label>Select Template</Label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 border bg-slate-50 p-2 rounded-lg">
-                  {templates.map(tpl => (
-                    <div
-                      key={tpl.id}
-                      onClick={() => setTemplateId(tpl.id)}
-                      className={cn(
-                        "p-3 rounded border text-center cursor-pointer text-xs font-bold transition-all",
-                        templateId === tpl.id ? "bg-primary text-white border-primary" : "bg-white text-slate-500 hover:border-primary"
-                      )}
-                    >
-                      <div className="flex justify-center mb-1">
-                        {tpl.type === 'ECOMMERCE_ITEM' ? <Store size={14} /> : <Sparkles size={14} />}
-                      </div>
-                      {tpl.name}
-                    </div>
-                  ))}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  You can switch templates later without losing your content.
-                </div>
+          {/* Hero */}
+          <Card>
+            <CardHeader><CardTitle className="text-base">Hero Section</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <Label className="text-xs">Headline</Label>
+                <Input value={editedContent.content?.hero?.title || ""} onChange={e => updateField("content.hero.title", e.target.value)} />
               </div>
-            )}
+              <div className="space-y-1">
+                <Label className="text-xs">Subtitle</Label>
+                <Input value={editedContent.content?.hero?.subtitle || ""} onChange={e => updateField("content.hero.subtitle", e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">CTA Button Text</Label>
+                <Input value={editedContent.content?.hero?.ctaText || ""} onChange={e => updateField("content.hero.ctaText", e.target.value)} />
+              </div>
+            </CardContent>
+          </Card>
 
-            {["brand", "content", "media"].includes(step) && (
-              <div className="space-y-4">
-                {!templateId && (
-                  <div className="rounded-lg border bg-slate-50 p-3 text-xs text-slate-600">
-                    Choose a template first to unlock editable sections.
-                  </div>
-                )}
-                {templateId && sections.length === 0 && (
-                  <div className="rounded-lg border bg-slate-50 p-3 text-xs text-slate-600">
-                    This template doesn’t expose editable fields yet.
-                  </div>
-                )}
-                {templateId && sections.map((section: any) => {
-                  const fields = getSectionFields(section)
-                  if (!fields.length) return null
-                  return (
-                    <div key={section.id} className="space-y-3 p-4 bg-slate-50 border rounded-xl">
-                      <h4 className="text-sm font-bold border-b pb-1">{section.label}</h4>
-                      <div className="space-y-4">
-                        {fields.map((field: any) => (
-                          <div key={field.key} className="space-y-1">
-                            <Label className="text-xs">{field.label}</Label>
-                            {field.type === 'TEXT' && (
-                              <Input
-                                className="h-8 text-xs"
-                                placeholder={field.defaultValue || ""}
-                                value={cmsData[`${section.id}.${field.key}`] || ""}
-                                onChange={e => setCmsData({
-                                  ...cmsData,
-                                  [`${section.id}.${field.key}`]: e.target.value
-                                })}
-                              />
-                            )}
-                            {field.type === 'COLOR' && (
-                              <div className="flex gap-2 items-center">
-                                <input
-                                  type="color"
-                                  className="size-6 rounded cursor-pointer"
-                                  value={cmsData[`${section.id}.${field.key}`] || field.defaultValue || "#000000"}
-                                  onChange={e => setCmsData({
-                                    ...cmsData,
-                                    [`${section.id}.${field.key}`]: e.target.value
-                                  })}
-                                />
-                                <Input
-                                  className="h-8 text-xs"
-                                  value={cmsData[`${section.id}.${field.key}`] || field.defaultValue || "#000000"}
-                                  onChange={e => setCmsData({
-                                    ...cmsData,
-                                    [`${section.id}.${field.key}`]: e.target.value
-                                  })}
-                                />
-                              </div>
-                            )}
-                            {field.type === 'IMAGE_URL' && (
-                              <div className="flex gap-1">
-                                <Input
-                                  className="h-8 text-xs"
-                                  placeholder="Paste image URL..."
-                                  value={cmsData[`${section.id}.${field.key}`] || ""}
-                                  onChange={e => setCmsData({
-                                    ...cmsData,
-                                    [`${section.id}.${field.key}`]: e.target.value
-                                  })}
-                                />
-                                <Button variant="outline" size="icon" className="shrink-0" aria-label="Upload image">
-                                  <Upload size={14} />
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })}
+          {/* About */}
+          <Card>
+            <CardHeader><CardTitle className="text-base">About Section</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1">
+                <Label className="text-xs">About Title</Label>
+                <Input value={editedContent.content?.about?.title || ""} onChange={e => updateField("content.about.title", e.target.value)} />
               </div>
-            )}
+              <div className="space-y-1">
+                <Label className="text-xs">About Text</Label>
+                <Textarea rows={4} value={editedContent.content?.about?.text || ""} onChange={e => updateField("content.about.text", e.target.value)} />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
 
-            {step === "review" && (
-              <div className="space-y-4">
-                <div className="rounded-xl border bg-slate-50 p-4">
-                  <div className="text-sm font-semibold">Ready to generate your site?</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    We’ll save your configuration and our agent will build the website.
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="rounded-lg border p-3">
-                    <div className="text-muted-foreground">Template</div>
-                    <div className="font-semibold mt-1">{selectedTemplate?.name || "Not selected"}</div>
-                  </div>
-                  <div className="rounded-lg border p-3">
-                    <div className="text-muted-foreground">Content fields</div>
-                    <div className="font-semibold mt-1">
-                      {sections.reduce((acc: number, s: any) => acc + (s.fields?.length || 0), 0)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-          <div className="border-t px-6 py-4 flex items-center justify-between">
-            <Button variant="outline" onClick={() => setStepIndex(Math.max(0, stepIndex - 1))} disabled={isFirstStep}>
-              Back
-            </Button>
-            {!isLastStep && (
-              <Button onClick={() => setStepIndex(Math.min(steps.length - 1, stepIndex + 1))}>
-                Next step
-              </Button>
-            )}
-            {isLastStep && (
-              <Button
-                onClick={async () => {
-                  const ok = await handleSaveConfig()
-                  if (ok) {
-                    setCompletedSetup(true)
-                    await handlePublish()
-                  }
-                }}
-                disabled={isSaving || !templateId}
-              >
-                {isSaving ? "Saving..." : "Save & generate website"}
-              </Button>
-            )}
+  // ── PUBLISHED STATE ──
+  if (isPublished) {
+    return (
+      <div className="h-full flex flex-col space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold font-headline">My Website</h2>
+            <p className="text-muted-foreground mt-1">Manage the online presence for {activeBiz.name}.</p>
           </div>
+          <div className="flex gap-3">
+            <a href={`http://localhost:3004/?tenant=${activeBiz.id}`} target="_blank" rel="noopener noreferrer">
+              <Button variant="outline" className="gap-2">
+                <ExternalLink size={16} /> View Storefront
+              </Button>
+            </a>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => { setIsPublished(false); setGeneratedContent(null); setDeployStatus(null) }}
+            >
+              <RefreshCw size={16} /> Regenerate
+            </Button>
+            <Button className="gap-2 bg-green-600 hover:bg-green-700">
+              <Check size={16} /> Published!
+            </Button>
+          </div>
+        </div>
+        <Card className="border bg-green-50">
+          <CardContent className="py-6 text-center">
+            <Check size={32} className="text-green-600 mx-auto mb-2" />
+            <p className="font-semibold text-green-700">Your website is live!</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              View it at{" "}
+              <a href={`http://localhost:3004/?tenant=${activeBiz.id}`} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                localhost:3004/?tenant={activeBiz.id}
+              </a>
+            </p>
+          </CardContent>
         </Card>
       </div>
     )
   }
 
+  // ── INTAKE FORM (default) ──
   return (
-    <div className="h-full flex flex-col space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold font-headline">My Website</h2>
-          <p className="text-muted-foreground mt-1">Manage the online presence for {activeBiz.name}.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" className="gap-2">
-            <RefreshCw size={16} /> Regenerate
-          </Button>
-          <Button
-            className={cn("gap-2 min-w-[120px]", isPublished ? "bg-green-600 hover:bg-green-700" : "bg-primary")}
-            onClick={handlePublish}
-            disabled={isPublishing}
-          >
-            {isPublishing ? (
-              <><RefreshCw size={16} className="animate-spin" /> {deployStatus === 'PROCESSING' ? 'Building...' : deployStatus === 'QUEUED' ? 'Queued...' : 'Publishing...'}</>
-            ) : isPublished ? (
-              <><Check size={16} /> Published!</>
-            ) : "Publish Changes"}
-          </Button>
-        </div>
+    <div className="h-full flex flex-col space-y-6">
+      <div>
+        <h2 className="text-3xl font-bold font-headline flex items-center gap-2">
+          <Wand2 size={24} /> Generate Your Website
+        </h2>
+        <p className="text-muted-foreground mt-1">
+          Tell us your preferences — AI will write professional content for <strong>{activeBiz.name}</strong>.
+        </p>
       </div>
 
-      {isPublishing && (
-        <div className="rounded-xl border bg-slate-50 p-4 text-sm text-slate-700 flex items-center gap-2">
-          <Sparkle size={16} className="text-primary" />
-          Our agent is creating your website. This can take a couple of minutes.
-        </div>
-      )}
-
-      <div className="grid grid-cols-12 gap-8 flex-1">
-        <div className="col-span-12 lg:col-span-8 space-y-4 flex flex-col">
-          <Card className="border shadow-sm flex-1 flex flex-col overflow-hidden">
-            <CardHeader className="bg-slate-50 border-b py-3 px-4 flex flex-row items-center justify-between space-y-0">
-              <div className="flex items-center gap-2">
-                <div className="flex gap-1.5 mr-4">
-                  <div className="size-3 rounded-full bg-red-400"></div>
-                  <div className="size-3 rounded-full bg-yellow-400"></div>
-                  <div className="size-3 rounded-full bg-green-400"></div>
-                </div>
-                <div className="bg-white px-3 py-1 rounded text-xs text-muted-foreground border flex items-center gap-2 min-w-[240px]">
-                  <Globe size={12} /> {activeBiz.name.toLowerCase().replace(/\s/g, "")}.bizspark.ai
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Tabs value={view} onValueChange={setView}>
-                  <TabsList className="bg-transparent border">
-                    <TabsTrigger value="desktop" className="size-8 p-0"><Monitor size={16} /></TabsTrigger>
-                    <TabsTrigger value="mobile" className="size-8 p-0"><Smartphone size={16} /></TabsTrigger>
-                  </TabsList>
-                </Tabs>
-                <Button variant="ghost" size="icon"><ExternalLink size={16} /></Button>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0 flex-1 bg-slate-100 flex justify-center overflow-auto">
-              <div
-                className={cn(
-                  "bg-white transition-all duration-300 shadow-2xl my-8",
-                  view === "desktop" ? "w-full max-w-5xl" : "w-[375px]"
-                )}
-                style={{ minHeight: "100%" }}
-              >
-                <iframe
-                  srcDoc={activeBiz.html}
-                  className="w-full h-full border-none"
-                  style={{ minHeight: "800px" }}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="col-span-12 lg:col-span-4 space-y-6">
-          <Card>
-            <CardHeader className="flex flex-row items-start justify-between gap-3">
-              <div>
-                <CardTitle>Configuration</CardTitle>
-                <CardDescription>Update template and content.</CardDescription>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleSaveConfig}
-                disabled={isSaving || !templateId}
-                className="h-8 text-xs font-medium text-primary"
-              >
-                {isSaving ? "Saving..." : "Save Draft"}
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-4 max-h-[600px] overflow-auto">
-              <div className="space-y-3">
-                <Label>Select Template</Label>
-                <div className="grid grid-cols-2 gap-2 border bg-slate-50 p-2 rounded-lg">
-                  {templates.map(tpl => (
-                    <div
-                      key={tpl.id}
-                      onClick={() => setTemplateId(tpl.id)}
-                      className={cn(
-                        "p-3 rounded border text-center cursor-pointer text-xs font-bold transition-all",
-                        templateId === tpl.id ? "bg-primary text-white border-primary" : "bg-white text-slate-500 hover:border-primary"
-                      )}
-                    >
-                      <div className="flex justify-center mb-1">
-                        {tpl.type === 'ECOMMERCE_ITEM' ? <Store size={14} /> : <Sparkles size={14} />}
-                      </div>
-                      {tpl.name}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {!templateId && (
-                <div className="rounded-lg border bg-slate-50 p-3 text-xs text-slate-600">
-                  Select a template to edit website fields.
-                </div>
-              )}
-              {templateId && sections.length === 0 && (
-                <div className="rounded-lg border bg-slate-50 p-3 text-xs text-slate-600">
-                  This template doesn’t expose editable fields yet.
-                </div>
-              )}
-              {templateId && sections.map((section: any) => (
-                <div key={section.id} className="space-y-3 p-4 bg-slate-50 border rounded-xl">
-                  <h4 className="text-sm font-bold border-b pb-1">{section.label}</h4>
-                  <div className="space-y-4">
-                    {section.fields?.map((field: any) => (
-                      <div key={field.key} className="space-y-1">
-                        <Label className="text-xs">{field.label}</Label>
-                        {field.type === 'TEXT' && (
-                          <Input
-                            className="h-8 text-xs"
-                            placeholder={field.defaultValue || ""}
-                            value={cmsData[`${section.id}.${field.key}`] || ""}
-                            onChange={e => setCmsData({
-                              ...cmsData,
-                              [`${section.id}.${field.key}`]: e.target.value
-                            })}
-                          />
-                        )}
-                        {field.type === 'COLOR' && (
-                          <div className="flex gap-2 items-center">
-                            <input
-                              type="color"
-                              className="size-6 rounded cursor-pointer"
-                              value={cmsData[`${section.id}.${field.key}`] || field.defaultValue || "#000000"}
-                              onChange={e => setCmsData({
-                                ...cmsData,
-                                [`${section.id}.${field.key}`]: e.target.value
-                              })}
-                            />
-                            <Input
-                              className="h-8 text-xs"
-                              value={cmsData[`${section.id}.${field.key}`] || field.defaultValue || "#000000"}
-                              onChange={e => setCmsData({
-                                ...cmsData,
-                                [`${section.id}.${field.key}`]: e.target.value
-                              })}
-                            />
-                          </div>
-                        )}
-                        {field.type === 'IMAGE_URL' && (
-                          <div className="flex gap-1">
-                            <Input
-                              className="h-8 text-xs"
-                              placeholder="Paste image URL..."
-                              value={cmsData[`${section.id}.${field.key}`] || ""}
-                              onChange={e => setCmsData({
-                                ...cmsData,
-                                [`${section.id}.${field.key}`]: e.target.value
-                              })}
-                            />
-                            <Button variant="outline" size="icon" className="shrink-0" aria-label="Upload image">
-                              <Upload size={14} />
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+      <div className="max-w-xl space-y-6">
+        <Card className="border-2">
+          <CardHeader>
+            <CardTitle className="text-base">What tone suits your business?</CardTitle>
+            <CardDescription>AI will match the writing style to your selection.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3">
+              {TONES.map(t => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => setTone(t.value)}
+                  className={cn(
+                    "p-3 rounded-lg border-2 text-sm font-medium transition-all text-left",
+                    tone === t.value
+                      ? "border-primary bg-primary/5 text-primary"
+                      : "border-slate-200 hover:border-primary/50"
+                  )}
+                >
+                  {t.label}
+                </button>
               ))}
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-2">
+          <CardHeader>
+            <CardTitle className="text-base">Brand Color</CardTitle>
+            <CardDescription>AI will generate a complementary color palette.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-3 items-center">
+              <input
+                type="color"
+                className="size-10 rounded-lg cursor-pointer border-2"
+                value={primaryColor}
+                onChange={e => setPrimaryColor(e.target.value)}
+              />
+              <Input
+                className="max-w-[140px]"
+                value={primaryColor}
+                onChange={e => setPrimaryColor(e.target.value)}
+                placeholder="#2563eb"
+              />
+              <span className="text-sm text-muted-foreground">Primary brand color</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Button size="lg" className="w-full gap-2 h-12 text-base" onClick={handleGenerate}>
+          <Sparkles size={18} /> Generate with AI
+        </Button>
+
+        <p className="text-xs text-center text-muted-foreground">
+          Powered by Google Gemini · Takes 10–20 seconds · You can edit before publishing
+        </p>
       </div>
     </div>
   )
