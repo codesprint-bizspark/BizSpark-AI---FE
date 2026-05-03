@@ -28,6 +28,7 @@ export default function WebsiteManagement() {
   const [editedContent, setEditedContent] = useState<any>(null)
   const [isApproving, setIsApproving] = useState(false)
   const [isPublished, setIsPublished] = useState(false)
+  const [adminCredentials, setAdminCredentials] = useState<{ email: string; password: string } | null>(null)
 
   // Intake form state
   const [tone, setTone] = useState("professional")
@@ -111,7 +112,10 @@ export default function WebsiteManagement() {
     if (!currentTaskId || !editedContent) return
     setIsApproving(true)
     try {
-      await apiClient.post(`/agents/tasks/${currentTaskId}/approve`, { content: editedContent })
+      const res = await apiClient.post(`/agents/tasks/${currentTaskId}/approve`, { content: editedContent })
+      if (res.data?.adminCredentials) {
+        setAdminCredentials(res.data.adminCredentials)
+      }
       setIsPublished(true)
       setDeployStatus("COMPLETED")
       toast({ title: "Website Published!", description: "Your site is now live." })
@@ -289,18 +293,48 @@ export default function WebsiteManagement() {
             </Button>
           </div>
         </div>
-        <Card className="border bg-green-50">
-          <CardContent className="py-6 text-center">
-            <Check size={32} className="text-green-600 mx-auto mb-2" />
-            <p className="font-semibold text-green-700">Your website is live!</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              View it at{" "}
-              <a href={`http://localhost:3004/?tenant=${activeBiz.id}`} target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                localhost:3004/?tenant={activeBiz.id}
-              </a>
-            </p>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card className="border bg-green-50">
+            <CardContent className="py-6 text-center">
+              <Check size={32} className="text-green-600 mx-auto mb-2" />
+              <p className="font-semibold text-green-700">Your website is live!</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                View it at{" "}
+                <a href={`http://localhost:3004/?tenant=${activeBiz.id}`} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                  localhost:3004/?tenant={activeBiz.id}
+                </a>
+              </p>
+            </CardContent>
+          </Card>
+
+          {adminCredentials && (
+            <Card className="border border-amber-200 bg-amber-50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-amber-800 flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+                  Store Admin Credentials — save these now
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex items-center justify-between bg-white rounded px-3 py-2 border">
+                  <span className="text-muted-foreground text-xs w-16 shrink-0">Email</span>
+                  <span className="font-mono text-xs flex-1 text-center">{adminCredentials.email}</span>
+                </div>
+                <div className="flex items-center justify-between bg-white rounded px-3 py-2 border">
+                  <span className="text-muted-foreground text-xs w-16 shrink-0">Password</span>
+                  <span className="font-mono text-xs flex-1 text-center font-bold tracking-wide">{adminCredentials.password}</span>
+                </div>
+                <p className="text-xs text-amber-700 pt-1">
+                  Use these to log in to your store admin at{" "}
+                  <a href={`http://localhost:3004/auth?tenant=${activeBiz.id}`} target="_blank" rel="noopener noreferrer" className="underline">
+                    the storefront
+                  </a>
+                  . You can change your password after logging in.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
     )
   }
