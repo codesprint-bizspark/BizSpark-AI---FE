@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Loader2, Building2, Sparkles, ExternalLink, Copy, Check } from "lucide-react"
+import { Loader2, Building2, Sparkles, Check } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -48,9 +48,6 @@ const DESCRIPTION_EXAMPLES = [
 
 type SuccessData = {
   businessName: string
-  storefrontUrl: string
-  adminUrl: string
-  adminCredentials: { email: string; password: string } | null
 }
 
 type Props = {
@@ -58,23 +55,6 @@ type Props = {
   onOpenChange: (open: boolean) => void
 }
 
-function CopyField({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false)
-  const copy = () => {
-    navigator.clipboard.writeText(value)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
-  return (
-    <div className="flex items-center gap-2 bg-white rounded border px-3 py-2">
-      <span className="text-xs text-muted-foreground w-20 shrink-0">{label}</span>
-      <span className="font-mono text-xs flex-1 truncate">{value}</span>
-      <button onClick={copy} className="text-muted-foreground hover:text-foreground shrink-0">
-        {copied ? <Check size={13} className="text-green-600" /> : <Copy size={13} />}
-      </button>
-    </div>
-  )
-}
 
 export function CreateBusinessDialog({ open, onOpenChange }: Props) {
   const { toast } = useToast()
@@ -99,24 +79,16 @@ export function CreateBusinessDialog({ open, onOpenChange }: Props) {
       if (form.category) payload.category = form.category
       if (form.description.trim()) payload.description = form.description.trim()
 
-      // apiClient returns the raw JSON body (not axios-wrapped)
-      // API response shape: { success, message, data: {...business}, adminCredentials: {...} }
       const res = await apiClient.post("/business", payload)
       const biz = res.data ?? res
       localStorage.setItem("active_biz_id", biz.id)
 
-      // adminCredentials is top-level in the response, NOT inside res.data
       const creds = res.adminCredentials ?? null
       if (creds) {
         localStorage.setItem(`admin_creds_${biz.id}`, JSON.stringify(creds))
       }
 
-      setSuccess({
-        businessName: form.name.trim(),
-        storefrontUrl: biz.storefrontUrl || `http://localhost:3004/?tenant=${biz.id}`,
-        adminUrl: biz.adminUrl || `http://localhost:3004/auth?tenant=${biz.id}`,
-        adminCredentials: creds,
-      })
+      setSuccess({ businessName: form.name.trim() })
     } catch (error: any) {
       toast({ title: "Could not create business", description: error.message || "Unexpected error.", variant: "destructive" })
     } finally {
@@ -135,61 +107,19 @@ export function CreateBusinessDialog({ open, onOpenChange }: Props) {
   if (success) {
     return (
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <div className="size-10 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
-              <Check className="text-green-600" size={20} />
+            <div className="size-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+              <Check className="text-green-600" size={22} />
             </div>
-            <DialogTitle className="text-center">"{success.businessName}" is ready!</DialogTitle>
+            <DialogTitle className="text-center">"{success.businessName}" created!</DialogTitle>
             <DialogDescription className="text-center">
-              Your storefront and admin panel are live. Save these details.
+              Your business is set up. Head to <strong>My Website</strong> to generate your AI-powered storefront.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            {/* Storefront link */}
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Your Storefront</p>
-              <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded px-3 py-2">
-                <span className="font-mono text-xs flex-1 truncate text-blue-800">{success.storefrontUrl}</span>
-                <a href={success.storefrontUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 shrink-0">
-                  <ExternalLink size={14} />
-                </a>
-              </div>
-            </div>
-
-            {/* Admin credentials */}
-            {success.adminCredentials && (
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  Store Admin Login — <span className="text-amber-600 normal-case font-medium">save these now, shown once</span>
-                </p>
-                <div className="space-y-1.5 bg-amber-50 border border-amber-200 rounded p-3">
-                  <CopyField label="Login URL" value={success.adminUrl} />
-                  <CopyField label="Email" value={success.adminCredentials.email} />
-                  <CopyField label="Password" value={success.adminCredentials.password} />
-                  <p className="text-[11px] text-amber-700 pt-1">
-                    Log in to add products, manage orders, and configure your store.
-                    You can change your password after logging in.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {!success.adminCredentials && (
-              <div className="text-sm text-muted-foreground bg-muted rounded p-3 text-center">
-                Admin credentials will be shown after you generate and publish your website.
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <a href={success.storefrontUrl} target="_blank" rel="noopener noreferrer" className="gap-2">
-                <ExternalLink size={14} /> View Storefront
-              </a>
-            </Button>
-            <Button onClick={handleClose} className="gap-2">
+          <DialogFooter className="pt-2">
+            <Button onClick={handleClose} className="w-full gap-2">
               <Sparkles size={14} /> Go to Dashboard
             </Button>
           </DialogFooter>
