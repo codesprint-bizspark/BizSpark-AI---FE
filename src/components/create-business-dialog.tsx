@@ -99,20 +99,23 @@ export function CreateBusinessDialog({ open, onOpenChange }: Props) {
       if (form.category) payload.category = form.category
       if (form.description.trim()) payload.description = form.description.trim()
 
+      // apiClient returns the raw JSON body (not axios-wrapped)
+      // API response shape: { success, message, data: {...business}, adminCredentials: {...} }
       const res = await apiClient.post("/business", payload)
-      const biz = res.data.data ?? res.data
+      const biz = res.data ?? res
       localStorage.setItem("active_biz_id", biz.id)
 
-      // Persist credentials so the website page can show them after publish
-      if (res.data.adminCredentials) {
-        localStorage.setItem(`admin_creds_${biz.id}`, JSON.stringify(res.data.adminCredentials))
+      // adminCredentials is top-level in the response, NOT inside res.data
+      const creds = res.adminCredentials ?? null
+      if (creds) {
+        localStorage.setItem(`admin_creds_${biz.id}`, JSON.stringify(creds))
       }
 
       setSuccess({
         businessName: form.name.trim(),
         storefrontUrl: biz.storefrontUrl || `http://localhost:3004/?tenant=${biz.id}`,
         adminUrl: biz.adminUrl || `http://localhost:3004/auth?tenant=${biz.id}`,
-        adminCredentials: res.data.adminCredentials ?? null,
+        adminCredentials: creds,
       })
     } catch (error: any) {
       toast({ title: "Could not create business", description: error.message || "Unexpected error.", variant: "destructive" })
