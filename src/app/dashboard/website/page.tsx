@@ -195,14 +195,28 @@ export default function WebsiteManagement() {
   if (generatedContent && deployStatus === "PENDING_APPROVAL") {
     const g = generatedContent
     const c = g.content ?? {}
+
+    const setG = (patch: any) => setGeneratedContent((prev: any) => ({ ...prev, ...patch }))
+    const setC = (patch: any) => setGeneratedContent((prev: any) => ({
+      ...prev, content: { ...(prev.content ?? {}), ...patch }
+    }))
+    const setFeature = (i: number, patch: any) => setGeneratedContent((prev: any) => {
+      const features = [...(prev.content?.features ?? [])]
+      features[i] = { ...features[i], ...patch }
+      return { ...prev, content: { ...(prev.content ?? {}), features } }
+    })
+
+    const field = "w-full text-sm border rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
+    const textarea = "w-full text-xs border rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-3xl font-bold font-headline flex items-center gap-2">
-              <Sparkles size={22} className="text-primary" /> Ready to Publish
+              <Sparkles size={22} className="text-primary" /> Review & Edit
             </h2>
-            <p className="text-muted-foreground mt-1">Review everything AI generated before publishing to your storefront.</p>
+            <p className="text-muted-foreground mt-1">Edit any field, then publish to your storefront.</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={handleReject} disabled={isApproving}>
@@ -223,72 +237,75 @@ export default function WebsiteManagement() {
               <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Branding</CardTitle>
             </CardHeader>
             <CardContent className="px-5 pb-5 space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="size-5 rounded-full border shrink-0" style={{ backgroundColor: g.primaryColor ?? "#2563eb" }} />
-                {g.secondaryColor && <div className="size-5 rounded-full border shrink-0" style={{ backgroundColor: g.secondaryColor }} />}
-                <span className="font-bold text-sm">{g.businessName}</span>
-              </div>
-              {g.tagline && <p className="text-xs text-muted-foreground italic">"{g.tagline}"</p>}
-              <div className="flex gap-4 text-xs text-muted-foreground">
-                {g.primaryColor   && <span>Primary: <span className="font-mono">{g.primaryColor}</span></span>}
-                {g.secondaryColor && <span>Secondary: <span className="font-mono">{g.secondaryColor}</span></span>}
+              <input className={field} value={g.tagline ?? ""} onChange={e => setG({ tagline: e.target.value })} placeholder="Tagline" />
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <input type="color" value={g.primaryColor ?? "#2563eb"} onChange={e => setG({ primaryColor: e.target.value })}
+                    className="size-8 rounded cursor-pointer border" />
+                  <span className="text-xs text-muted-foreground">Primary</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <input type="color" value={g.secondaryColor ?? "#ffffff"} onChange={e => setG({ secondaryColor: e.target.value })}
+                    className="size-8 rounded cursor-pointer border" />
+                  <span className="text-xs text-muted-foreground">Secondary</span>
+                </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Announcement */}
-          {c.announcement?.text && (
-            <Card className="border-2">
-              <CardHeader className="pb-2 pt-4 px-5">
-                <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Announcement Banner</CardTitle>
-              </CardHeader>
-              <CardContent className="px-5 pb-5">
-                <p className="text-sm">{c.announcement.text}</p>
-              </CardContent>
-            </Card>
-          )}
+          <Card className="border-2">
+            <CardHeader className="pb-2 pt-4 px-5">
+              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Announcement Banner</CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 pb-5">
+              <input className={field} value={c.announcement?.text ?? ""} placeholder="Announcement text"
+                onChange={e => setC({ announcement: { ...(c.announcement ?? {}), text: e.target.value, enabled: true } })} />
+            </CardContent>
+          </Card>
 
           {/* Hero */}
           <Card className="border-2">
             <CardHeader className="pb-2 pt-4 px-5">
               <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Hero Section</CardTitle>
             </CardHeader>
-            <CardContent className="px-5 pb-5 space-y-1.5">
-              <p className="font-bold text-sm leading-snug">{c.hero?.title}</p>
-              <p className="text-xs text-muted-foreground">{c.hero?.subtitle}</p>
-              {c.hero?.ctaText && (
-                <span className="inline-block mt-1 text-xs bg-primary/10 text-primary font-medium px-2 py-0.5 rounded">
-                  CTA: {c.hero.ctaText}
-                </span>
-              )}
+            <CardContent className="px-5 pb-5 space-y-2">
+              <input className={field} value={c.hero?.title ?? ""} placeholder="Hero title"
+                onChange={e => setC({ hero: { ...(c.hero ?? {}), title: e.target.value } })} />
+              <textarea className={textarea} rows={2} value={c.hero?.subtitle ?? ""} placeholder="Hero subtitle"
+                onChange={e => setC({ hero: { ...(c.hero ?? {}), subtitle: e.target.value } })} />
+              <input className={field} value={c.hero?.ctaText ?? ""} placeholder="CTA button text"
+                onChange={e => setC({ hero: { ...(c.hero ?? {}), ctaText: e.target.value } })} />
             </CardContent>
           </Card>
 
           {/* About */}
-          {c.about && (
-            <Card className="border-2">
-              <CardHeader className="pb-2 pt-4 px-5">
-                <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">About Section</CardTitle>
-              </CardHeader>
-              <CardContent className="px-5 pb-5 space-y-1.5">
-                {c.about.title && <p className="font-semibold text-sm">{c.about.title}</p>}
-                <p className="text-xs text-muted-foreground">{c.about.text}</p>
-              </CardContent>
-            </Card>
-          )}
+          <Card className="border-2">
+            <CardHeader className="pb-2 pt-4 px-5">
+              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">About Section</CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 pb-5 space-y-2">
+              <input className={field} value={c.about?.title ?? ""} placeholder="About title"
+                onChange={e => setC({ about: { ...(c.about ?? {}), title: e.target.value } })} />
+              <textarea className={textarea} rows={3} value={c.about?.text ?? ""} placeholder="About text"
+                onChange={e => setC({ about: { ...(c.about ?? {}), text: e.target.value } })} />
+            </CardContent>
+          </Card>
 
           {/* Features */}
           {c.features?.length > 0 && (
             <Card className="border-2 sm:col-span-2">
               <CardHeader className="pb-2 pt-4 px-5">
-                <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Features ({c.features.length})</CardTitle>
+                <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Features</CardTitle>
               </CardHeader>
               <CardContent className="px-5 pb-5">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {c.features.map((f: any, i: number) => (
-                    <div key={i} className="rounded-lg border bg-slate-50 px-3 py-2.5 space-y-0.5">
-                      <p className="text-xs font-semibold text-slate-700">{f.title}</p>
-                      <p className="text-xs text-muted-foreground">{f.description}</p>
+                    <div key={i} className="rounded-lg border bg-slate-50 px-3 py-2.5 space-y-1.5">
+                      <input className={field + " font-semibold"} value={f.title ?? ""} placeholder="Title"
+                        onChange={e => setFeature(i, { title: e.target.value })} />
+                      <textarea className={textarea} rows={2} value={f.description ?? ""} placeholder="Description"
+                        onChange={e => setFeature(i, { description: e.target.value })} />
                       <span className="text-[10px] font-mono text-slate-400">{f.icon}</span>
                     </div>
                   ))}
@@ -298,39 +315,32 @@ export default function WebsiteManagement() {
           )}
 
           {/* SEO */}
-          {c.seo && (
-            <Card className="border-2">
-              <CardHeader className="pb-2 pt-4 px-5">
-                <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">SEO</CardTitle>
-              </CardHeader>
-              <CardContent className="px-5 pb-5 space-y-2">
-                {c.seo.metaDescription && <p className="text-xs text-muted-foreground">{c.seo.metaDescription}</p>}
-                {c.seo.keywords && (
-                  <div className="flex flex-wrap gap-1">
-                    {c.seo.keywords.split(",").map((k: string) => (
-                      <span key={k} className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{k.trim()}</span>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+          <Card className="border-2">
+            <CardHeader className="pb-2 pt-4 px-5">
+              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">SEO</CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 pb-5 space-y-2">
+              <textarea className={textarea} rows={2} value={c.seo?.metaDescription ?? ""} placeholder="Meta description"
+                onChange={e => setC({ seo: { ...(c.seo ?? {}), metaDescription: e.target.value } })} />
+              <input className={field} value={c.seo?.keywords ?? ""} placeholder="Keywords (comma separated)"
+                onChange={e => setC({ seo: { ...(c.seo ?? {}), keywords: e.target.value } })} />
+            </CardContent>
+          </Card>
 
-          {/* Footer / Contact */}
-          {c.footer?.contactEmail && (
-            <Card className="border-2">
-              <CardHeader className="pb-2 pt-4 px-5">
-                <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Contact</CardTitle>
-              </CardHeader>
-              <CardContent className="px-5 pb-5">
-                <p className="text-sm font-mono">{c.footer.contactEmail}</p>
-              </CardContent>
-            </Card>
-          )}
+          {/* Contact */}
+          <Card className="border-2">
+            <CardHeader className="pb-2 pt-4 px-5">
+              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Contact Email</CardTitle>
+            </CardHeader>
+            <CardContent className="px-5 pb-5">
+              <input className={field + " font-mono"} type="email" value={c.footer?.contactEmail ?? ""} placeholder="contact@yourbusiness.com"
+                onChange={e => setC({ footer: { ...(c.footer ?? {}), contactEmail: e.target.value } })} />
+            </CardContent>
+          </Card>
         </div>
 
         <p className="text-xs text-muted-foreground text-center">
-          Happy with it? Hit <strong>Publish Now</strong>. Want something different? Hit <strong>Redo</strong>.
+          Edit any field above, then hit <strong>Publish Now</strong>. Want a completely different result? Hit <strong>Redo</strong>.
         </p>
       </div>
     )
