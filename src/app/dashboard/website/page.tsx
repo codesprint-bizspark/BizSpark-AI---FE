@@ -160,18 +160,69 @@ export default function WebsiteManagement() {
 
   // ── GENERATING STATE ──
   if (isGenerating) {
+    const steps = [
+      { key: "QUEUED",            label: "Sending to AI",        desc: "Your request is queued"              },
+      { key: "PROCESSING",        label: "Writing your website", desc: "Gemini AI is crafting your content"  },
+      { key: "PENDING_APPROVAL",  label: "Finishing up",         desc: "Applying final touches"              },
+    ]
+    const currentIdx = steps.findIndex(s => s.key === deployStatus)
+    const activeIdx = currentIdx === -1 ? 0 : currentIdx
+
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-4 text-center">
-        <div className="size-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-          <Sparkles className="text-primary animate-pulse" size={28} />
+      <div className="h-full flex flex-col items-center justify-center gap-10 text-center px-6">
+        {/* Animated orb */}
+        <div className="relative flex items-center justify-center">
+          <span className="absolute inline-flex size-24 rounded-full bg-primary/20 animate-ping" style={{ animationDuration: "1.6s" }} />
+          <span className="absolute inline-flex size-20 rounded-full bg-primary/10 animate-ping" style={{ animationDuration: "2.2s", animationDelay: "0.3s" }} />
+          <div className="relative size-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <Sparkles className="text-primary animate-spin" size={28} style={{ animationDuration: "3s" }} />
+          </div>
         </div>
-        <h2 className="text-2xl font-bold">Generating your website…</h2>
-        <p className="text-muted-foreground max-w-sm">
-          Gemini AI is writing professional copy for <strong>{activeBiz.name}</strong>. This takes about 10–20 seconds.
-        </p>
-        <Badge variant="outline" className="text-xs uppercase tracking-wide">
-          {deployStatus === "PROCESSING" ? "AI is writing..." : "Queued..."}
-        </Badge>
+
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold">Building <span className="text-primary">{activeBiz.name}</span></h2>
+          <p className="text-muted-foreground text-sm max-w-xs mx-auto">
+            Gemini AI is writing professional copy tailored to your business. Hang tight…
+          </p>
+        </div>
+
+        {/* Step progress */}
+        <div className="flex flex-col gap-3 w-full max-w-xs text-left">
+          {steps.map((step, i) => {
+            const done = i < activeIdx
+            const active = i === activeIdx
+            return (
+              <div key={step.key} className={cn(
+                "flex items-center gap-3 rounded-xl px-4 py-3 border transition-all duration-500",
+                active  ? "border-primary/40 bg-primary/5 shadow-sm" : "",
+                done    ? "border-green-200 bg-green-50" : "",
+                !active && !done ? "border-slate-100 opacity-40" : ""
+              )}>
+                <div className={cn(
+                  "size-7 rounded-full flex items-center justify-center shrink-0 transition-all duration-300",
+                  done   ? "bg-green-500" : "",
+                  active ? "bg-primary" : "",
+                  !active && !done ? "bg-slate-200" : ""
+                )}>
+                  {done
+                    ? <Check size={14} className="text-white" />
+                    : active
+                      ? <Loader2 size={14} className="text-white animate-spin" />
+                      : <span className="text-xs text-slate-400 font-bold">{i + 1}</span>
+                  }
+                </div>
+                <div>
+                  <p className={cn("text-sm font-semibold", active ? "text-primary" : done ? "text-green-700" : "text-slate-400")}>
+                    {step.label}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{step.desc}</p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <p className="text-xs text-muted-foreground">Usually takes 10–20 seconds</p>
       </div>
     )
   }
