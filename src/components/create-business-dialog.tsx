@@ -103,6 +103,11 @@ export function CreateBusinessDialog({ open, onOpenChange }: Props) {
       const biz = res.data.data ?? res.data
       localStorage.setItem("active_biz_id", biz.id)
 
+      // Persist credentials so the website page can show them after publish
+      if (res.data.adminCredentials) {
+        localStorage.setItem(`admin_creds_${biz.id}`, JSON.stringify(res.data.adminCredentials))
+      }
+
       setSuccess({
         businessName: form.name.trim(),
         storefrontUrl: biz.storefrontUrl || `http://localhost:3004/?tenant=${biz.id}`,

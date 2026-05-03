@@ -45,9 +45,10 @@ export default function WebsiteManagement() {
         const res = await apiClient.get(`/business/${activeId}`)
         if (res.data) {
           setActiveBiz(res.data)
-          // Restore published state if this business already has a website
           if (res.data.websites?.length > 0) {
             setIsPublished(true)
+            const stored = localStorage.getItem(`admin_creds_${res.data.id}`)
+            if (stored) setAdminCredentials(JSON.parse(stored))
           }
         }
       } catch (e) { console.error(e) }
@@ -113,9 +114,10 @@ export default function WebsiteManagement() {
     setIsApproving(true)
     try {
       const res = await apiClient.post(`/agents/tasks/${currentTaskId}/approve`, { content: editedContent })
-      if (res.data?.adminCredentials) {
-        setAdminCredentials(res.data.adminCredentials)
-      }
+      // Credentials come from approve if just provisioned, or from localStorage if created earlier
+      const creds = res.data?.adminCredentials
+        ?? JSON.parse(localStorage.getItem(`admin_creds_${activeBiz.id}`) || 'null')
+      if (creds) setAdminCredentials(creds)
       setIsPublished(true)
       setDeployStatus("COMPLETED")
       toast({ title: "Website Published!", description: "Your site is now live." })
