@@ -44,7 +44,9 @@ export const apiClient = {
             throw new Error(errorData.message || 'An error occurred during the request');
         }
 
-        return response.json();
+        // Best-effort JSON parse — DELETE may return empty body
+        const text = await response.text();
+        return text ? JSON.parse(text) : {};
     },
 
     async post(endpoint: string, data: any) {
@@ -52,6 +54,24 @@ export const apiClient = {
             method: 'POST',
             body: JSON.stringify(data),
         });
+    },
+
+    async patch(endpoint: string, data: any) {
+        return this.request(endpoint, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async put(endpoint: string, data: any) {
+        return this.request(endpoint, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async delete(endpoint: string) {
+        return this.request(endpoint, { method: 'DELETE' });
     },
 
     async get(endpoint: string) {
