@@ -37,7 +37,7 @@ export const socialApi = {
         audience?: string;
         hashtagLimit?: number;
         generateMedia?: boolean;
-    }): Promise<{ posts: SocialPost[]; generationId: string }> => {
+    }): Promise<{ taskId: string; status: string }> => {
         const res = await apiClient.post(`/social/content/generate`, payload);
         return res.data;
     },

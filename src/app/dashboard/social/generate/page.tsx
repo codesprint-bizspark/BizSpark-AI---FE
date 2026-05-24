@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { socialApi } from "@/lib/social/api"
+import { apiClient } from "@/lib/api-client"
 import { SocialPlatform, SocialPostType, PLATFORM_META } from "@/lib/social/types"
 import { useSocialAccounts } from "@/lib/social/use-social-accounts"
 import { SocialSubNav } from "../sub-nav"
@@ -32,6 +33,7 @@ export default function GenerateSocialContentPage() {
   const [audience, setAudience] = useState("")
   const [generateMedia, setGenerateMedia] = useState(true)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [genStep, setGenStep] = useState(0)
 
   useEffect(() => { setActiveBizId(localStorage.getItem("active_biz_id") || "") }, [])
 
@@ -66,6 +68,28 @@ export default function GenerateSocialContentPage() {
     setPlatforms((prev) => prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p])
   }
 
+  const pollUntilDone = async (taskId: string): Promise<void> => {
+    for (let attempt = 0; attempt < 60; attempt++) {
+      await new Promise((r) => setTimeout(r, 2000))
+      const res = await apiClient.get(`/agents/tasks/${taskId}`)
+      const task = res.data
+      if (task.status === "COMPLETED") {
+        const posts: Array<{ id: string }> = task.outputData?.posts ?? []
+        toast({ title: "Generated!", description: `Created ${posts.length} draft${posts.length === 1 ? "" : "s"}.` })
+        if (posts[0]) {
+          router.push(`/dashboard/social/posts/${posts[0].id}`)
+        } else {
+          router.push("/dashboard/social/posts")
+        }
+        return
+      }
+      if (task.status === "FAILED") {
+        throw new Error(task.outputData?.error || "Content generation failed")
+      }
+    }
+    throw new Error("Generation timed out — please try again")
+  }
+
   const handleGenerate = async () => {
     if (!activeBizId) return
     if (platforms.length === 0) {
@@ -89,8 +113,23 @@ export default function GenerateSocialContentPage() {
       toast({ title: "Heads-up", description: "Short videos work best on TikTok or Instagram Reels." })
     }
     setIsGenerating(true)
+    setGenStep(0)
+    const steps = generateMedia && (postType === "IMAGE" || postType === "FLYER")
+      ? [
+          { label: "Writing captions & hashtags…", delay: 0 },
+          { label: "Generating AI image…",         delay: 5000 },
+          { label: "Almost ready…",                delay: 40000 },
+        ]
+      : [
+          { label: "Writing captions & hashtags…", delay: 0 },
+          { label: "Almost ready…",                delay: 4000 },
+        ]
+    const timers: ReturnType<typeof setTimeout>[] = []
+    steps.forEach((s, i) => {
+      timers.push(setTimeout(() => setGenStep(i), s.delay))
+    })
     try {
-      const result = await socialApi.generate({
+      const { taskId } = await socialApi.generate({
         businessId: activeBizId,
         platforms,
         postType,
@@ -99,17 +138,13 @@ export default function GenerateSocialContentPage() {
         audience: audience.trim() || undefined,
         generateMedia,
       })
-      toast({ title: "Generated!", description: `Created ${result.posts.length} draft${result.posts.length === 1 ? "" : "s"}.` })
-      const first = result.posts[0]
-      if (first) {
-        router.push(`/dashboard/social/posts/${first.id}`)
-      } else {
-        router.push("/dashboard/social/posts")
-      }
+      await pollUntilDone(taskId)
     } catch (e: any) {
       toast({ title: "Generation failed", description: e.message, variant: "destructive" })
     } finally {
+      timers.forEach(clearTimeout)
       setIsGenerating(false)
+      setGenStep(0)
     }
   }
 
@@ -335,19 +370,40 @@ export default function GenerateSocialContentPage() {
         </Card>
 
         <div className="flex flex-col gap-2">
-          <Button
-            size="lg"
-            className="w-full sm:w-auto gap-2 h-12 text-base px-8"
-            onClick={handleGenerate}
-            disabled={isGenerating || platforms.length === 0}
-          >
-            {isGenerating ? (
-              <><Loader2 size={18} className="animate-spin" /> Generating…</>
-            ) : (
-              <><Sparkles size={18} /> Generate {platforms.length || ""} Draft{platforms.length === 1 ? "" : "s"}</>
-            )}
-          </Button>
-          {platforms.length > 0 && (
+          {isGenerating ? (
+            <div className="rounded-xl border-2 border-primary/30 bg-primary/5 px-5 py-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <Loader2 size={18} className="animate-spin text-primary shrink-0" />
+                <p className="text-sm font-semibold text-primary">
+                  {(generateMedia && (postType === "IMAGE" || postType === "FLYER")
+                    ? ["Writing captions & hashtags…", "Generating AI image…", "Almost ready…"]
+                    : ["Writing captions & hashtags…", "Almost ready…"]
+                  )[genStep] ?? "Almost ready…"}
+                </p>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-primary/15 overflow-hidden">
+                <div
+                  className="h-full bg-primary rounded-full transition-all duration-[3000ms] ease-out"
+                  style={{ width: `${(generateMedia && (postType === "IMAGE" || postType === "FLYER") ? [20, 55, 90] : [30, 90])[genStep] ?? 20}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {generateMedia && (postType === "IMAGE" || postType === "FLYER")
+                  ? "Caption ready in ~5s · image takes ~45s"
+                  : "Usually takes 5–10 seconds"}
+              </p>
+            </div>
+          ) : (
+            <Button
+              size="lg"
+              className="w-full sm:w-auto gap-2 h-12 text-base px-8"
+              onClick={handleGenerate}
+              disabled={platforms.length === 0}
+            >
+              <Sparkles size={18} /> Generate {platforms.length || ""} Draft{platforms.length === 1 ? "" : "s"}
+            </Button>
+          )}
+          {!isGenerating && platforms.length > 0 && (
             <p className="text-xs text-muted-foreground">
               Will generate one draft per selected platform:{" "}
               <span className="font-semibold text-foreground">

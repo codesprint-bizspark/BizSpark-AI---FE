@@ -17,7 +17,7 @@ const TONES = [
 
 const STEPS = [
   { key: "QUEUED",           label: "Sending to AI",        desc: "Request queued"                     },
-  { key: "PROCESSING",       label: "Writing your website", desc: "Gemini AI is crafting your content"  },
+  { key: "PROCESSING",       label: "Writing your website", desc: "AI is crafting your content"  },
   { key: "PENDING_APPROVAL", label: "Ready to review",      desc: "Content generated — awaiting you"   },
 ]
 
@@ -150,7 +150,7 @@ export default function WebsiteManagement() {
         <div className="space-y-2">
           <h2 className="text-2xl font-bold">Building <span className="text-primary">{activeBiz.name}</span></h2>
           <p className="text-muted-foreground text-sm max-w-xs mx-auto">
-            Gemini AI is crafting professional content tailored to your business.
+            AI is crafting professional content tailored to your business.
           </p>
         </div>
 
@@ -461,7 +461,7 @@ export default function WebsiteManagement() {
         </Card>
 
         <p className="text-xs text-center text-muted-foreground mt-3">
-          Powered by Google Gemini · 10–20 seconds · Review before publishing
+          Powered by OpenAI · 10–20 seconds · Review before publishing
         </p>
       </div>
     </div>

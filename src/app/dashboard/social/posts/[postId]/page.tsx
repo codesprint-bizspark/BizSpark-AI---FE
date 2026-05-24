@@ -157,8 +157,26 @@ export default function SocialPostDetailPage() {
     setIsPublishing(true)
     try {
       await socialApi.publishNow(activeBizId, post.id, post.accountId)
-      toast({ title: "Publishing started", description: "Your post is being published — check status in a few seconds." })
-      await reload()
+      // Poll until the post transitions out of PUBLISHING (max ~40s)
+      let resolved = false
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 2000))
+        const updated = await socialApi.getPost(activeBizId, post.id)
+        if (updated.status !== "PUBLISHING") {
+          setPost(updated)
+          if (updated.status === "PUBLISHED") {
+            toast({ title: "Published!", description: updated.externalPostUrl ? "View it live with the button above." : "Your post is live." })
+          } else if (updated.status === "FAILED") {
+            toast({ title: "Publish failed", description: updated.lastError ?? "Unknown error", variant: "destructive" })
+          }
+          resolved = true
+          break
+        }
+      }
+      if (!resolved) {
+        await reload()
+        toast({ title: "Still publishing…", description: "The platform is taking longer than usual — check back in a moment." })
+      }
     } catch (e: any) {
       toast({ title: "Publish failed", description: e.message, variant: "destructive" })
     } finally {
@@ -202,6 +220,11 @@ export default function SocialPostDetailPage() {
     [],
   )
 
+  // Bust the scheduled-page sessionStorage cache so navigating there shows fresh data
+  const _clearScheduledCache = () => {
+    try { sessionStorage.removeItem(`bs_scheduled_${activeBizId}`) } catch {}
+  }
+
   const handleSchedule = async () => {
     if (!post) return
     if (!post.accountId) {
@@ -214,11 +237,9 @@ export default function SocialPostDetailPage() {
     }
     setIsScheduling(true)
     try {
-      // scheduledDate is guaranteed non-null when scheduleValidation.ok is true.
       const iso = scheduledDate!.toISOString()
-      // eslint-disable-next-line no-console
-      console.debug("[schedule]", { scheduledAt, scheduledDateISO: iso, tz: userTimezone })
       const updated = await socialApi.schedule(activeBizId, post.id, iso)
+      _clearScheduledCache()
       setPost(updated)
       toast({ title: "Scheduled", description: new Date(updated.scheduledAt!).toLocaleString() })
     } catch (e: any) {
@@ -233,6 +254,7 @@ export default function SocialPostDetailPage() {
     if (!confirm("Cancel this scheduled post? It will be moved back to draft.")) return
     try {
       const updated = await socialApi.cancelScheduled(activeBizId, post.id)
+      _clearScheduledCache()
       setPost(updated)
       toast({ title: "Scheduled post cancelled" })
     } catch (e: any) {
@@ -253,6 +275,7 @@ export default function SocialPostDetailPage() {
   const selectedAccount = platformAccounts.find((a) => a.id === post.accountId) || platformAccounts[0]
   const isPublished = post.status === "PUBLISHED"
   const isLocked = isPublished || post.status === "PUBLISHING"
+  const isTikTok = post.platform === "TIKTOK"
   const aiMeta = (post.aiMetadata ?? {}) as Record<string, any>
 
   return (
@@ -497,12 +520,29 @@ export default function SocialPostDetailPage() {
             </CardContent>
           </Card>
 
+          {/* TikTok publishing banner */}
+          {isTikTok && !isLocked && (
+            <Card className="border-2 border-amber-300 bg-amber-50">
+              <CardContent className="pt-4 pb-4 flex items-start gap-3">
+                <div className="size-9 rounded-full bg-amber-400 flex items-center justify-center shrink-0">
+                  <Rocket size={16} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-amber-900">TikTok publishing coming soon</p>
+                  <p className="text-xs text-amber-800 mt-0.5">
+                    TikTok API integration is not yet live. Your draft is saved — publishing and scheduling are disabled until support is added.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Schedule + publish */}
           {!isLocked && (() => {
             // Single source of truth for the Schedule button's enabled state.
             const isScheduled = post.status === 'SCHEDULED'
             const missingAccount = !post.accountId
-            const canSchedule = !missingAccount && scheduleValidation.ok && !isScheduling
+            const canSchedule = !missingAccount && scheduleValidation.ok && !isScheduling && !isTikTok
             const disabledReason = missingAccount
               ? "Pick a connected account in 'Publish as' above"
               : !scheduleValidation.ok
@@ -575,8 +615,8 @@ export default function SocialPostDetailPage() {
                       </Button>
                       <Button
                         onClick={handlePublish}
-                        disabled={isPublishing || !post.accountId}
-                        title={!post.accountId ? "Pick a connected account first" : undefined}
+                        disabled={isPublishing || !post.accountId || isTikTok}
+                        title={isTikTok ? "TikTok publishing coming soon" : !post.accountId ? "Pick a connected account first" : undefined}
                         className="gap-2"
                       >
                         {isPublishing ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />}
