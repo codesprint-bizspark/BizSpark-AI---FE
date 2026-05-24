@@ -361,11 +361,11 @@ export default function WebsiteManagement() {
             <Button variant="outline" size="sm" onClick={() => { setIsPublished(false); setDeployStatus(null); setCurrentTaskId(null) }} className="gap-2">
               <RefreshCw size={14} /> Regenerate
             </Button>
-            <a href={storefrontUrl} target="_blank" rel="noopener noreferrer">
-              <Button size="sm" className="gap-2">
+            <Button size="sm" className="gap-2" asChild>
+              <a href={storefrontUrl} target="_blank" rel="noopener noreferrer">
                 <ExternalLink size={14} /> View Storefront
-              </Button>
-            </a>
+              </a>
+            </Button>
           </div>
         </div>
 
@@ -380,11 +380,11 @@ export default function WebsiteManagement() {
               {storefrontUrl}
             </a>
           </div>
-          <a href={storefrontUrl} target="_blank" rel="noopener noreferrer">
-            <Button variant="outline" size="sm" className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 shrink-0">
+          <Button variant="outline" size="sm" className="gap-1.5 border-green-300 text-green-700 hover:bg-green-100 shrink-0" asChild>
+            <a href={storefrontUrl} target="_blank" rel="noopener noreferrer">
               <ExternalLink size={13} /> Open
-            </Button>
-          </a>
+            </a>
+          </Button>
         </div>
 
         {adminCredentials && (
