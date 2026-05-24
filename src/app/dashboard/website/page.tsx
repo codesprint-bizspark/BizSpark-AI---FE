@@ -348,7 +348,8 @@ export default function WebsiteManagement() {
 
   // ── PUBLISHED ────────────────────────────────────────────────────────────────
   if (isPublished) {
-    const storefrontUrl = `http://localhost:3004/?tenant=${activeBiz.id}`
+    const commerceBase = (process.env.NEXT_PUBLIC_COMMERCE_URL || 'http://localhost:3004').replace(/\/$/, '')
+    const storefrontUrl = `${commerceBase}/?tenant=${activeBiz.id}`
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -393,7 +394,7 @@ export default function WebsiteManagement() {
             </CardHeader>
             <CardContent className="px-5 pb-5 space-y-2">
               {[
-                { label: "Login URL", value: `http://localhost:3004/auth?tenant=${activeBiz.id}` },
+                { label: "Login URL", value: `${commerceBase}/auth?tenant=${activeBiz.id}` },
                 { label: "Email",     value: adminCredentials.email },
                 { label: "Password",  value: adminCredentials.password },
               ].map(row => (
