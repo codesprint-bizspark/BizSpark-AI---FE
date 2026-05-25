@@ -11,7 +11,8 @@ import {
   Settings, 
   Zap,
   Users,
-  Sparkles
+  Sparkles,
+  Smartphone
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -28,6 +29,7 @@ import {
 const menuItems = [
   { icon: LayoutDashboard, label: "Overview", href: "/dashboard" },
   { icon: Globe, label: "My Website", href: "/dashboard/website" },
+  { icon: Smartphone, label: "Mobile App", href: "/dashboard/mobile-app" },
   { icon: Share2, label: "Social Media", href: "/dashboard/social" },
   { icon: Package, label: "Products", href: "/dashboard/products" },
   { icon: Users, label: "Team Management", href: "/dashboard/team" },
