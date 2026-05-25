@@ -20,6 +20,7 @@ import {
   Bookmark,
   Play,
   ExternalLink,
+  Upload,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -28,6 +29,8 @@ import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { socialApi } from "@/lib/social/api"
 import { SocialAccount, SocialPost, PLATFORM_META } from "@/lib/social/types"
+import { MediaUploader } from "@/components/social/media-uploader"
+import { type LocalMedia } from "@/lib/social/media-utils"
 
 export default function SocialPostDetailPage() {
   const params = useParams<{ postId: string }>()
@@ -44,6 +47,11 @@ export default function SocialPostDetailPage() {
   const [regenField, setRegenField] = useState<string | null>(null)
   const [isAttachingMedia, setIsAttachingMedia] = useState(false)
   const [scheduledAt, setScheduledAt] = useState("")
+  // Inline uploader: holds files the user has staged but not yet sent to the
+  // backend. We keep it collapsed by default so the page stays compact.
+  const [showUploader, setShowUploader] = useState(false)
+  const [stagedUploads, setStagedUploads] = useState<LocalMedia[]>([])
+  const [isUploading, setIsUploading] = useState(false)
 
   useEffect(() => { setActiveBizId(localStorage.getItem("active_biz_id") || "") }, [])
 
@@ -134,6 +142,26 @@ export default function SocialPostDetailPage() {
       toast({ title: "Attach failed", description: e.message, variant: "destructive" })
     } finally {
       setIsAttachingMedia(false)
+    }
+  }
+
+  const handleUploadStaged = async () => {
+    if (!post || stagedUploads.length === 0) return
+    setIsUploading(true)
+    try {
+      const files = stagedUploads.map((m) => m.file)
+      await socialApi.uploadMediaFiles(activeBizId, post.id, files)
+      // Free preview blob URLs after a successful upload.
+      stagedUploads.forEach((m) => URL.revokeObjectURL(m.previewUrl))
+      const count = files.length
+      setStagedUploads([])
+      setShowUploader(false)
+      await reload()
+      toast({ title: `Uploaded ${count} file${count === 1 ? "" : "s"}` })
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" })
+    } finally {
+      setIsUploading(false)
     }
   }
 
@@ -407,9 +435,18 @@ export default function SocialPostDetailPage() {
           {/* Media */}
           <Card className="border-2">
             <CardContent className="pt-5 pb-5 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Media</p>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  <Button
+                    variant={showUploader ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setShowUploader((v) => !v)}
+                    disabled={isAttachingMedia || isLocked || isUploading}
+                    className="gap-1.5 text-xs"
+                  >
+                    <Upload size={12} /> {showUploader ? "Hide uploader" : "Upload from device"}
+                  </Button>
                   <Button variant="outline" size="sm" onClick={handleAttachUrl} disabled={isAttachingMedia || isLocked} className="gap-1.5 text-xs">
                     <ImageIcon size={12} /> Attach URL
                   </Button>
@@ -420,6 +457,41 @@ export default function SocialPostDetailPage() {
                   )}
                 </div>
               </div>
+
+              {showUploader && !isLocked && (
+                <div className="rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 p-3 space-y-3">
+                  <MediaUploader
+                    items={stagedUploads}
+                    onChange={setStagedUploads}
+                    accept={post.postType === 'VIDEO' ? 'video' : 'both'}
+                    busy={isUploading}
+                  />
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        stagedUploads.forEach((m) => URL.revokeObjectURL(m.previewUrl))
+                        setStagedUploads([])
+                        setShowUploader(false)
+                      }}
+                      disabled={isUploading}
+                      className="text-xs"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleUploadStaged}
+                      disabled={stagedUploads.length === 0 || isUploading}
+                      className="gap-1.5 text-xs"
+                    >
+                      {isUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                      Upload {stagedUploads.length || ""} file{stagedUploads.length === 1 ? "" : "s"}
+                    </Button>
+                  </div>
+                </div>
+              )}
               {post.media && post.media.length > 0 ? (
                 <div className="grid grid-cols-3 gap-2">
                   {post.media.map((m) => (

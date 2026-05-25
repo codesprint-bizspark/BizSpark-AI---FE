@@ -37,6 +37,22 @@ export const socialApi = {
         audience?: string;
         hashtagLimit?: number;
         generateMedia?: boolean;
+        /**
+         * User-uploaded media as base64 data URLs. The agent attaches these to
+         * every generated post atomically — no separate authenticated upload
+         * step needed, so there's no race between post creation and the FE
+         * trying to attach media before the post is fully committed.
+         */
+        userMedia?: Array<{
+            url: string;
+            kind: 'IMAGE' | 'VIDEO' | 'THUMBNAIL';
+            mimeType?: string;
+            width?: number;
+            height?: number;
+            durationMs?: number;
+            originalName?: string;
+            sizeBytes?: number;
+        }>;
     }): Promise<{ taskId: string; status: string }> => {
         const res = await apiClient.post(`/social/content/generate`, payload);
         return res.data;
@@ -79,6 +95,33 @@ export const socialApi = {
     }): Promise<SocialPostMedia> => {
         const res = await apiClient.post(`/social/content/${businessId}/posts/${postId}/media`, payload);
         return res.data;
+    },
+    /**
+     * Attach many user-uploaded files (images / videos) to a post in one call.
+     * Each item carries the file content as a base64 data URL.
+     */
+    bulkAttachMedia: async (businessId: string, postId: string, items: Array<{
+        url: string;
+        kind: 'IMAGE' | 'VIDEO' | 'THUMBNAIL';
+        mimeType?: string;
+        width?: number;
+        height?: number;
+        durationMs?: number;
+        position?: number;
+    }>): Promise<SocialPostMedia[]> => {
+        const res = await apiClient.post(`/social/content/${businessId}/posts/${postId}/media/bulk`, { items });
+        return res.data ?? [];
+    },
+    /**
+     * Upload raw files as multipart/form-data. Preferred over `bulkAttachMedia`
+     * for any non-trivial file size because it streams bytes instead of
+     * inflating them ~33% with base64.
+     */
+    uploadMediaFiles: async (businessId: string, postId: string, files: File[]): Promise<SocialPostMedia[]> => {
+        const form = new FormData();
+        for (const f of files) form.append('files', f, f.name);
+        const res = await apiClient.postForm(`/social/content/${businessId}/posts/${postId}/media/upload`, form);
+        return res.data ?? [];
     },
     generateAiImage: async (businessId: string, postId: string, prompt?: string): Promise<SocialPostMedia> => {
         const res = await apiClient.post(`/social/content/${businessId}/posts/${postId}/media/ai-image`, { prompt });

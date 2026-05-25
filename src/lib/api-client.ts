@@ -25,8 +25,11 @@ export const apiClient = {
 
     async request(endpoint: string, options: RequestInit = {}) {
         const token = this.getAuthToken();
+        // Don't force JSON content-type for FormData — the browser sets the
+        // multipart boundary automatically and overriding it breaks the upload.
+        const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
         const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
+            ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
             ...((options.headers as Record<string, string>) || {}),
         };
 
@@ -47,6 +50,17 @@ export const apiClient = {
         // Best-effort JSON parse — DELETE may return empty body
         const text = await response.text();
         return text ? JSON.parse(text) : {};
+    },
+
+    /**
+     * Upload multipart/form-data — the browser sets the Content-Type +
+     * boundary, we just stream the bytes. Used for image / video uploads.
+     */
+    async postForm(endpoint: string, formData: FormData) {
+        return this.request(endpoint, {
+            method: 'POST',
+            body: formData,
+        });
     },
 
     async post(endpoint: string, data: any) {
