@@ -13,7 +13,8 @@ import {
   Zap,
   Users,
   Sparkles,
-  Bot
+  Bot,
+  Smartphone
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -30,6 +31,7 @@ import {
 const menuItems = [
   { icon: LayoutDashboard, label: "Overview", href: "/dashboard" },
   { icon: Globe, label: "My Website", href: "/dashboard/website" },
+  { icon: Smartphone, label: "Mobile App", href: "/dashboard/mobile-app" },
   { icon: Share2, label: "Social Media", href: "/dashboard/social" },
   { icon: MessageSquareText, label: "Google Reviews", href: "/dashboard/reviews" },
   { icon: Package, label: "Products", href: "/dashboard/products" },
