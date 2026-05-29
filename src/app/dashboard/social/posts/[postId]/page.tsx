@@ -20,6 +20,7 @@ import {
   Bookmark,
   Play,
   ExternalLink,
+  Upload,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -28,6 +29,8 @@ import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { socialApi } from "@/lib/social/api"
 import { SocialAccount, SocialPost, PLATFORM_META } from "@/lib/social/types"
+import { MediaUploader } from "@/components/social/media-uploader"
+import { type LocalMedia } from "@/lib/social/media-utils"
 
 export default function SocialPostDetailPage() {
   const params = useParams<{ postId: string }>()
@@ -44,6 +47,11 @@ export default function SocialPostDetailPage() {
   const [regenField, setRegenField] = useState<string | null>(null)
   const [isAttachingMedia, setIsAttachingMedia] = useState(false)
   const [scheduledAt, setScheduledAt] = useState("")
+  // Inline uploader: holds files the user has staged but not yet sent to the
+  // backend. We keep it collapsed by default so the page stays compact.
+  const [showUploader, setShowUploader] = useState(false)
+  const [stagedUploads, setStagedUploads] = useState<LocalMedia[]>([])
+  const [isUploading, setIsUploading] = useState(false)
 
   useEffect(() => { setActiveBizId(localStorage.getItem("active_biz_id") || "") }, [])
 
@@ -137,6 +145,26 @@ export default function SocialPostDetailPage() {
     }
   }
 
+  const handleUploadStaged = async () => {
+    if (!post || stagedUploads.length === 0) return
+    setIsUploading(true)
+    try {
+      const files = stagedUploads.map((m) => m.file)
+      await socialApi.uploadMediaFiles(activeBizId, post.id, files)
+      // Free preview blob URLs after a successful upload.
+      stagedUploads.forEach((m) => URL.revokeObjectURL(m.previewUrl))
+      const count = files.length
+      setStagedUploads([])
+      setShowUploader(false)
+      await reload()
+      toast({ title: `Uploaded ${count} file${count === 1 ? "" : "s"}` })
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" })
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
   const handleRemoveMedia = async (mediaId: string) => {
     if (!post) return
     if (!confirm("Remove this media?")) return
@@ -157,8 +185,26 @@ export default function SocialPostDetailPage() {
     setIsPublishing(true)
     try {
       await socialApi.publishNow(activeBizId, post.id, post.accountId)
-      toast({ title: "Publishing started", description: "Your post is being published — check status in a few seconds." })
-      await reload()
+      // Poll until the post transitions out of PUBLISHING (max ~40s)
+      let resolved = false
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 2000))
+        const updated = await socialApi.getPost(activeBizId, post.id)
+        if (updated.status !== "PUBLISHING") {
+          setPost(updated)
+          if (updated.status === "PUBLISHED") {
+            toast({ title: "Published!", description: updated.externalPostUrl ? "View it live with the button above." : "Your post is live." })
+          } else if (updated.status === "FAILED") {
+            toast({ title: "Publish failed", description: updated.lastError ?? "Unknown error", variant: "destructive" })
+          }
+          resolved = true
+          break
+        }
+      }
+      if (!resolved) {
+        await reload()
+        toast({ title: "Still publishing…", description: "The platform is taking longer than usual — check back in a moment." })
+      }
     } catch (e: any) {
       toast({ title: "Publish failed", description: e.message, variant: "destructive" })
     } finally {
@@ -202,6 +248,11 @@ export default function SocialPostDetailPage() {
     [],
   )
 
+  // Bust the scheduled-page sessionStorage cache so navigating there shows fresh data
+  const _clearScheduledCache = () => {
+    try { sessionStorage.removeItem(`bs_scheduled_${activeBizId}`) } catch {}
+  }
+
   const handleSchedule = async () => {
     if (!post) return
     if (!post.accountId) {
@@ -214,11 +265,9 @@ export default function SocialPostDetailPage() {
     }
     setIsScheduling(true)
     try {
-      // scheduledDate is guaranteed non-null when scheduleValidation.ok is true.
       const iso = scheduledDate!.toISOString()
-      // eslint-disable-next-line no-console
-      console.debug("[schedule]", { scheduledAt, scheduledDateISO: iso, tz: userTimezone })
       const updated = await socialApi.schedule(activeBizId, post.id, iso)
+      _clearScheduledCache()
       setPost(updated)
       toast({ title: "Scheduled", description: new Date(updated.scheduledAt!).toLocaleString() })
     } catch (e: any) {
@@ -233,6 +282,7 @@ export default function SocialPostDetailPage() {
     if (!confirm("Cancel this scheduled post? It will be moved back to draft.")) return
     try {
       const updated = await socialApi.cancelScheduled(activeBizId, post.id)
+      _clearScheduledCache()
       setPost(updated)
       toast({ title: "Scheduled post cancelled" })
     } catch (e: any) {
@@ -253,6 +303,7 @@ export default function SocialPostDetailPage() {
   const selectedAccount = platformAccounts.find((a) => a.id === post.accountId) || platformAccounts[0]
   const isPublished = post.status === "PUBLISHED"
   const isLocked = isPublished || post.status === "PUBLISHING"
+  const isTikTok = post.platform === "TIKTOK"
   const aiMeta = (post.aiMetadata ?? {}) as Record<string, any>
 
   return (
@@ -384,9 +435,18 @@ export default function SocialPostDetailPage() {
           {/* Media */}
           <Card className="border-2">
             <CardContent className="pt-5 pb-5 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Media</p>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  <Button
+                    variant={showUploader ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setShowUploader((v) => !v)}
+                    disabled={isAttachingMedia || isLocked || isUploading}
+                    className="gap-1.5 text-xs"
+                  >
+                    <Upload size={12} /> {showUploader ? "Hide uploader" : "Upload from device"}
+                  </Button>
                   <Button variant="outline" size="sm" onClick={handleAttachUrl} disabled={isAttachingMedia || isLocked} className="gap-1.5 text-xs">
                     <ImageIcon size={12} /> Attach URL
                   </Button>
@@ -397,6 +457,41 @@ export default function SocialPostDetailPage() {
                   )}
                 </div>
               </div>
+
+              {showUploader && !isLocked && (
+                <div className="rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 p-3 space-y-3">
+                  <MediaUploader
+                    items={stagedUploads}
+                    onChange={setStagedUploads}
+                    accept={post.postType === 'VIDEO' ? 'video' : 'both'}
+                    busy={isUploading}
+                  />
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        stagedUploads.forEach((m) => URL.revokeObjectURL(m.previewUrl))
+                        setStagedUploads([])
+                        setShowUploader(false)
+                      }}
+                      disabled={isUploading}
+                      className="text-xs"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleUploadStaged}
+                      disabled={stagedUploads.length === 0 || isUploading}
+                      className="gap-1.5 text-xs"
+                    >
+                      {isUploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                      Upload {stagedUploads.length || ""} file{stagedUploads.length === 1 ? "" : "s"}
+                    </Button>
+                  </div>
+                </div>
+              )}
               {post.media && post.media.length > 0 ? (
                 <div className="grid grid-cols-3 gap-2">
                   {post.media.map((m) => (
@@ -497,12 +592,29 @@ export default function SocialPostDetailPage() {
             </CardContent>
           </Card>
 
+          {/* TikTok publishing banner */}
+          {isTikTok && !isLocked && (
+            <Card className="border-2 border-amber-300 bg-amber-50">
+              <CardContent className="pt-4 pb-4 flex items-start gap-3">
+                <div className="size-9 rounded-full bg-amber-400 flex items-center justify-center shrink-0">
+                  <Rocket size={16} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-amber-900">TikTok publishing coming soon</p>
+                  <p className="text-xs text-amber-800 mt-0.5">
+                    TikTok API integration is not yet live. Your draft is saved — publishing and scheduling are disabled until support is added.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Schedule + publish */}
           {!isLocked && (() => {
             // Single source of truth for the Schedule button's enabled state.
             const isScheduled = post.status === 'SCHEDULED'
             const missingAccount = !post.accountId
-            const canSchedule = !missingAccount && scheduleValidation.ok && !isScheduling
+            const canSchedule = !missingAccount && scheduleValidation.ok && !isScheduling && !isTikTok
             const disabledReason = missingAccount
               ? "Pick a connected account in 'Publish as' above"
               : !scheduleValidation.ok
@@ -575,8 +687,8 @@ export default function SocialPostDetailPage() {
                       </Button>
                       <Button
                         onClick={handlePublish}
-                        disabled={isPublishing || !post.accountId}
-                        title={!post.accountId ? "Pick a connected account first" : undefined}
+                        disabled={isPublishing || !post.accountId || isTikTok}
+                        title={isTikTok ? "TikTok publishing coming soon" : !post.accountId ? "Pick a connected account first" : undefined}
                         className="gap-2"
                       >
                         {isPublishing ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />}

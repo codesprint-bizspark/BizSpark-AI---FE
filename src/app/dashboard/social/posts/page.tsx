@@ -12,6 +12,36 @@ import { socialApi } from "@/lib/social/api"
 import { SocialPost, PLATFORM_META } from "@/lib/social/types"
 import { SocialSubNav } from "../sub-nav"
 
+// Module-level cache — survives tab switches (component unmount/remount)
+let _cachedPosts: SocialPost[] | null = null
+let _cacheKey = ""
+
+// sessionStorage helpers — survive page refreshes within the same tab
+function _ssKey(bizId: string) { return `bs_posts_${bizId}` }
+
+function _ssGet(bizId: string): SocialPost[] | null {
+  if (typeof window === "undefined" || !bizId) return null
+  try {
+    const raw = sessionStorage.getItem(_ssKey(bizId))
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function _ssSet(bizId: string, posts: SocialPost[]) {
+  if (typeof window === "undefined" || !bizId) return
+  const key = _ssKey(bizId)
+  // Try storing with full images first; quota error → strip data URIs and retry
+  try {
+    sessionStorage.setItem(key, JSON.stringify(posts))
+    return
+  } catch {}
+  const slim = posts.map(p => ({
+    ...p,
+    media: p.media?.map(m => ({ ...m, url: m.url?.startsWith("data:") ? "" : m.url })),
+  }))
+  try { sessionStorage.setItem(key, JSON.stringify(slim)) } catch {}
+}
+
 const TYPE_ICONS: Record<SocialPost["postType"], any> = {
   TEXT: FileText,
   IMAGE: ImageIcon,
@@ -31,16 +61,37 @@ const STATUS_STYLES: Record<SocialPost["status"], string> = {
 export default function SocialDraftsPage() {
   const { toast } = useToast()
   const [activeBizId, setActiveBizId] = useState("")
-  const [posts, setPosts] = useState<SocialPost[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+
+  // Lazy initialisers run once on mount — read from module cache (tab switch)
+  // or sessionStorage (page refresh) to avoid a loading flash.
+  const [posts, setPosts] = useState<SocialPost[]>(() => {
+    if (typeof window === "undefined") return []
+    const bizId = localStorage.getItem("active_biz_id") || ""
+    if (_cachedPosts && _cacheKey === bizId) return _cachedPosts
+    return _ssGet(bizId) ?? []
+  })
+
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window === "undefined") return true
+    const bizId = localStorage.getItem("active_biz_id") || ""
+    if (_cachedPosts && _cacheKey === bizId) return false
+    return _ssGet(bizId) === null
+  })
 
   useEffect(() => { setActiveBizId(localStorage.getItem("active_biz_id") || "") }, [])
 
   const reload = useCallback(async () => {
     if (!activeBizId) return
-    setIsLoading(true)
+    // Only show the spinner when there is truly no data at all
+    const hasAnyCache =
+      (_cachedPosts !== null && _cacheKey === activeBizId) ||
+      _ssGet(activeBizId) !== null
+    if (!hasAnyCache) setIsLoading(true)
     try {
       const rows = await socialApi.listPosts(activeBizId, { take: 100 })
+      _cachedPosts = rows
+      _cacheKey = activeBizId
+      _ssSet(activeBizId, rows)
       setPosts(rows)
     } catch (e: any) {
       toast({ title: "Couldn't load posts", description: e.message, variant: "destructive" })
@@ -55,7 +106,10 @@ export default function SocialDraftsPage() {
     if (!confirm("Delete this draft?")) return
     try {
       await socialApi.deletePost(activeBizId, id)
-      setPosts((prev) => prev.filter((p) => p.id !== id))
+      const next = posts.filter((p) => p.id !== id)
+      if (_cacheKey === activeBizId) _cachedPosts = next
+      _ssSet(activeBizId, next)
+      setPosts(next)
       toast({ title: "Deleted" })
     } catch (e: any) {
       toast({ title: "Delete failed", description: e.message, variant: "destructive" })

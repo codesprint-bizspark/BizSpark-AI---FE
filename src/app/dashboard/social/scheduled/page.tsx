@@ -12,6 +12,33 @@ import { socialApi } from "@/lib/social/api"
 import { SocialPost, PLATFORM_META } from "@/lib/social/types"
 import { SocialSubNav } from "../sub-nav"
 
+// Module-level cache — survives tab switches (component unmount/remount)
+let _cachedScheduled: SocialPost[] | null = null
+let _cachedHistory: SocialPost[] | null = null
+let _cacheKey = ""
+
+// sessionStorage helpers — survive page refreshes within the same tab
+function _ssGet<T>(key: string): T | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = sessionStorage.getItem(key)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function _ssSet(key: string, data: unknown) {
+  if (typeof window === "undefined") return
+  // Try storing full data first; quota error → strip any data URI media fields
+  try { sessionStorage.setItem(key, JSON.stringify(data)); return } catch {}
+  const slim = JSON.parse(JSON.stringify(data, (_, v) =>
+    typeof v === "string" && v.startsWith("data:") ? "" : v
+  ))
+  try { sessionStorage.setItem(key, JSON.stringify(slim)) } catch {}
+}
+
+function _ssKeyScheduled(bizId: string) { return `bs_scheduled_${bizId}` }
+function _ssKeyHistory(bizId: string) { return `bs_history_${bizId}` }
+
 const STATUS_STYLES: Record<SocialPost["status"], string> = {
   DRAFT: "bg-slate-100 text-slate-700",
   SCHEDULED: "bg-blue-100 text-blue-700",
@@ -24,20 +51,51 @@ const STATUS_STYLES: Record<SocialPost["status"], string> = {
 export default function ScheduledSocialPostsPage() {
   const { toast } = useToast()
   const [activeBizId, setActiveBizId] = useState("")
-  const [scheduled, setScheduled] = useState<SocialPost[]>([])
-  const [history, setHistory] = useState<SocialPost[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+
+  // Lazy initialisers run once on mount — read from module cache (tab switch)
+  // or sessionStorage (page refresh) to avoid a loading flash.
+  const [scheduled, setScheduled] = useState<SocialPost[]>(() => {
+    if (typeof window === "undefined") return []
+    const bizId = localStorage.getItem("active_biz_id") || ""
+    if (_cachedScheduled && _cacheKey === bizId) return _cachedScheduled
+    return _ssGet<SocialPost[]>(_ssKeyScheduled(bizId)) ?? []
+  })
+
+  const [history, setHistory] = useState<SocialPost[]>(() => {
+    if (typeof window === "undefined") return []
+    const bizId = localStorage.getItem("active_biz_id") || ""
+    if (_cachedHistory && _cacheKey === bizId) return _cachedHistory
+    return _ssGet<SocialPost[]>(_ssKeyHistory(bizId)) ?? []
+  })
+
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window === "undefined") return true
+    const bizId = localStorage.getItem("active_biz_id") || ""
+    // Module cache hit → instant display, no spinner
+    if (_cachedScheduled && _cacheKey === bizId) return false
+    // sessionStorage miss (including after cache bust from post detail page) → show spinner
+    return _ssGet(_ssKeyScheduled(bizId)) === null
+  })
 
   useEffect(() => { setActiveBizId(localStorage.getItem("active_biz_id") || "") }, [])
 
   const reload = useCallback(async () => {
     if (!activeBizId) return
-    setIsLoading(true)
+    // Only show the spinner when there is truly no data at all
+    const hasAnyCache =
+      (_cachedScheduled !== null && _cacheKey === activeBizId) ||
+      _ssGet(_ssKeyScheduled(activeBizId)) !== null
+    if (!hasAnyCache) setIsLoading(true)
     try {
       const [s, h] = await Promise.all([
         socialApi.listScheduled(activeBizId),
         socialApi.listHistory(activeBizId, 50),
       ])
+      _cachedScheduled = s
+      _cachedHistory = h
+      _cacheKey = activeBizId
+      _ssSet(_ssKeyScheduled(activeBizId), s)
+      _ssSet(_ssKeyHistory(activeBizId), h)
       setScheduled(s)
       setHistory(h)
     } catch (e: any) {
