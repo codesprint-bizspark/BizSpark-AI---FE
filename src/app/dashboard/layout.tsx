@@ -26,6 +26,7 @@ import { Plus, Building2, ChevronDown, LogOut } from "lucide-react"
 import Link from "next/link"
 import { apiClient } from "@/lib/api-client"
 import { CreateBusinessDialog } from "@/components/create-business-dialog"
+import { DashboardTopbarActions } from "@/components/dashboard-topbar-actions"
 
 export default function DashboardLayout({
   children,
@@ -125,41 +126,7 @@ export default function DashboardLayout({
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-4">
-              <div className="flex flex-col items-end mr-2">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-tighter">Pro Account</span>
-                <span className="text-sm font-medium">{currentUser?.name || "User"}</span>
-              </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Account menu"
-                    className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm shadow-md ring-2 ring-white hover:ring-primary/30 transition-all focus:outline-none focus:ring-primary"
-                  >
-                    {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : "U"}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel className="font-normal">
-                    <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">{currentUser?.name || "User"}</p>
-                      <p className="text-xs leading-none text-muted-foreground truncate">
-                        {currentUser?.email || ""}
-                      </p>
-                    </div>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={handleLogout}
-                    className="text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer"
-                  >
-                    <LogOut className="mr-2 size-4" />
-                    <span>Log out</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <DashboardTopbarActions />
           </header>
           <main className="flex-1 overflow-auto p-8">
             {businesses.length === 0 ? (
