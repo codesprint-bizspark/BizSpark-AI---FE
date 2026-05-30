@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import { ExternalLink, RefreshCw, Sparkles, Check, Loader2, Rocket } from "lucide-react"
+import { ExternalLink, RefreshCw, Sparkles, Check, Loader2, Rocket, Eye } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -31,6 +31,7 @@ export default function WebsiteManagement() {
   const [isApproving, setIsApproving]     = useState(false)
   const [isPublished, setIsPublished]     = useState(false)
   const [adminCredentials, setAdminCredentials] = useState<{ email: string; password: string } | null>(null)
+  const [isRevealing, setIsRevealing]     = useState(false)
   const [tone, setTone]                   = useState("professional")
   const [primaryColor, setPrimaryColor]   = useState("#2563eb")
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
@@ -97,6 +98,24 @@ export default function WebsiteManagement() {
       setIsGenerating(false)
       setDeployStatus(null)
       toast({ title: "Failed to start generation", description: e.message, variant: "destructive" })
+    }
+  }
+
+  const handleRevealCredentials = async () => {
+    if (!activeBiz?.id) return
+    setIsRevealing(true)
+    try {
+      const res = await apiClient.post(`/business/${activeBiz.id}/store-credentials/reveal`, {})
+      const creds = res.data
+      if (creds) {
+        setAdminCredentials(creds)
+        localStorage.setItem(`admin_creds_${activeBiz.id}`, JSON.stringify(creds))
+        toast({ title: "Store login ready", description: "A fresh password was generated — save it." })
+      }
+    } catch (e: any) {
+      toast({ title: "Couldn't reveal login", description: e.message, variant: "destructive" })
+    } finally {
+      setIsRevealing(false)
     }
   }
 
@@ -387,26 +406,46 @@ export default function WebsiteManagement() {
           </Button>
         </div>
 
-        {adminCredentials && (
-          <Card className="border-2 border-amber-200 bg-amber-50">
-            <CardHeader className="pb-3 pt-5 px-5">
-              <CardTitle className="text-sm text-amber-800">Store Admin Login — save these credentials</CardTitle>
-            </CardHeader>
-            <CardContent className="px-5 pb-5 space-y-2">
-              {[
-                { label: "Login URL", value: `${commerceBase}/auth?tenant=${activeBiz.id}` },
-                { label: "Email",     value: adminCredentials.email },
-                { label: "Password",  value: adminCredentials.password },
-              ].map(row => (
-                <div key={row.label} className="flex items-center gap-3 bg-white rounded-lg px-3 py-2 border">
-                  <span className="text-xs text-muted-foreground w-16 shrink-0">{row.label}</span>
-                  <span className="font-mono text-xs flex-1 truncate">{row.value}</span>
+        <Card className="border-2 border-amber-200 bg-amber-50">
+          <CardHeader className="pb-3 pt-5 px-5">
+            <CardTitle className="text-sm text-amber-800">Store Admin Login</CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-5 space-y-2">
+            {adminCredentials ? (
+              <>
+                {[
+                  { label: "Login URL", value: `${commerceBase}/auth?tenant=${activeBiz.id}` },
+                  { label: "Email",     value: adminCredentials.email },
+                  { label: "Password",  value: adminCredentials.password },
+                ].map(row => (
+                  <div key={row.label} className="flex items-center gap-3 bg-white rounded-lg px-3 py-2 border">
+                    <span className="text-xs text-muted-foreground w-16 shrink-0">{row.label}</span>
+                    <span className="font-mono text-xs flex-1 truncate">{row.value}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between pt-1">
+                  <p className="text-xs text-amber-700">Use these to manage products, orders, and store settings.</p>
+                  <Button variant="ghost" size="sm" onClick={handleRevealCredentials} disabled={isRevealing}
+                    className="text-amber-700 hover:bg-amber-100 gap-1.5">
+                    {isRevealing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                    Reset password
+                  </Button>
                 </div>
-              ))}
-              <p className="text-xs text-amber-700 pt-1">Use these to manage products, orders, and your store settings.</p>
-            </CardContent>
-          </Card>
-        )}
+              </>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-amber-700">
+                  Reveal your store admin login to manage products, orders, and settings.
+                  A fresh password is generated each time.
+                </p>
+                <Button onClick={handleRevealCredentials} disabled={isRevealing} className="gap-2">
+                  {isRevealing ? <Loader2 size={14} className="animate-spin" /> : <Eye size={14} />}
+                  Reveal store login
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     )
   }

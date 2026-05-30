@@ -19,7 +19,7 @@ const TONES = [
 
 const STEPS = [
   { key: "QUEUED",           label: "Sending to AI",        desc: "Request queued"                         },
-  { key: "PROCESSING",       label: "Building your app",    desc: "GPT-4o is crafting your mobile config"  },
+  { key: "PROCESSING",       label: "Building your app",    desc: "AI is crafting your mobile config"  },
   { key: "PENDING_APPROVAL", label: "Ready to review",      desc: "Config generated — awaiting you"        },
 ]
 
@@ -34,7 +34,24 @@ export default function MobileAppManagement() {
   const [isPublished, setIsPublished]           = useState(false)
   const [tone, setTone]                         = useState("professional")
   const [primaryColor, setPrimaryColor]         = useState("#3b82f6")
+  const [tab, setTabState]                      = useState<"config" | "stores">(() => {
+    if (typeof window === "undefined") return "config"
+    return (sessionStorage.getItem("bs_mobile_tab") as "config" | "stores") || "config"
+  })
+  const setTab = (t: "config" | "stores") => {
+    setTabState(t)
+    try { sessionStorage.setItem("bs_mobile_tab", t) } catch {}
+  }
+  const [storeData, setStoreData]               = useState<any>(null)
+  const [isRequestingStore, setIsRequestingStore] = useState(false)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
+
+  const loadStoreStatus = async (bizId: string) => {
+    try {
+      const res = await apiClient.get(`/business/${bizId}/mobile-app/store-status`)
+      setStoreData(res.data)
+    } catch { /* no mobile app yet */ }
+  }
 
   useEffect(() => {
     const fetchBiz = async () => {
@@ -48,11 +65,26 @@ export default function MobileAppManagement() {
             setIsPublished(true)
           }
         }
+        await loadStoreStatus(activeId)
       } catch (e) { console.error(e) }
     }
     fetchBiz()
     return () => { if (pollingRef.current) clearInterval(pollingRef.current) }
   }, [])
+
+  const handleRequestStore = async () => {
+    if (!activeBiz) return
+    setIsRequestingStore(true)
+    try {
+      await apiClient.post(`/business/${activeBiz.id}/mobile-app/store-request`, {})
+      await loadStoreStatus(activeBiz.id)
+      toast({ title: "Request submitted", description: "Our team will review your store publishing request." })
+    } catch (e: any) {
+      toast({ title: "Request failed", description: e.message, variant: "destructive" })
+    } finally {
+      setIsRequestingStore(false)
+    }
+  }
 
   const startPolling = (taskId: string) => {
     pollingRef.current = setInterval(async () => {
@@ -121,6 +153,250 @@ export default function MobileAppManagement() {
   }
 
   if (!activeBiz) return null
+
+  // ── Tab navigation (shown on settled screens) ────────────────────────────────
+  const TabNav = () => (
+    <div className="flex gap-1 border-b mb-6">
+      <button
+        onClick={() => setTab("config")}
+        className={cn(
+          "px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors",
+          tab === "config" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-slate-700"
+        )}
+      >
+        App Config
+      </button>
+      <button
+        onClick={() => setTab("stores")}
+        className={cn(
+          "px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px transition-colors",
+          tab === "stores" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-slate-700"
+        )}
+      >
+        Publish to Stores
+      </button>
+    </div>
+  )
+
+  // ── STORE PUBLISHING TAB ──────────────────────────────────────────────────────
+  if (tab === "stores" && !isGenerating && !(generatedContent && deployStatus === "PENDING_APPROVAL")) {
+    const s = storeData?.storeStatus ?? "NONE"
+    const configReady = storeData?.configStatus === "PUBLISHED" || isPublished
+
+    const STATUS_META: Record<string, { label: string; cls: string; desc: string }> = {
+      NONE:      { label: "Not requested", cls: "bg-slate-100 text-slate-600", desc: "Request publishing to the App Store and Google Play." },
+      REQUESTED: { label: "Requested",     cls: "bg-blue-100 text-blue-700",   desc: "Your request was received. Our team will start the review soon." },
+      IN_REVIEW: { label: "In review",     cls: "bg-amber-100 text-amber-700", desc: "Store submission in progress. This typically takes 2–3 months." },
+      PUBLISHED: { label: "Published",     cls: "bg-green-100 text-green-700", desc: "Your app is live! Share the store links below." },
+      REJECTED:  { label: "Rejected",      cls: "bg-red-100 text-red-700",     desc: "The request was declined. See the note below." },
+    }
+    const meta = STATUS_META[s] ?? STATUS_META.NONE
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-3xl font-bold font-headline">My Mobile App</h2>
+          <p className="text-muted-foreground mt-1">{activeBiz.name} · publish to app stores</p>
+        </div>
+        <TabNav />
+
+        <div className="max-w-2xl space-y-5">
+          {/* ── Delivery-style progress tracker ── */}
+          {s !== "NONE" && (
+            <Card className="border-2">
+              <CardContent className="pt-7 pb-7 px-8">
+                {(() => {
+                  const TRACK = [
+                    { key: "REQUESTED", label: "Requested", desc: "Request received" },
+                    { key: "IN_REVIEW", label: "In Review", desc: "Store submission" },
+                    { key: "PUBLISHED", label: "Published", desc: "Live on stores" },
+                  ]
+                  const rejected = s === "REJECTED"
+                  const currentIdx = rejected ? 1 : TRACK.findIndex(t => t.key === s)
+                  return (
+                    <div className="flex items-start">
+                      {TRACK.map((step, i) => {
+                        const done = i < currentIdx
+                        const active = i === currentIdx && !rejected
+                        const isRejectedStep = rejected && i === 1
+                        return (
+                          <div key={step.key} className="flex-1 flex flex-col items-center relative">
+                            {/* connector line */}
+                            {i > 0 && (
+                              <span className={cn(
+                                "absolute top-4 right-1/2 w-full h-0.5 -z-0",
+                                i <= currentIdx && !rejected ? "bg-primary" : "bg-slate-200"
+                              )} />
+                            )}
+                            {/* node */}
+                            <div className={cn(
+                              "relative z-10 size-9 rounded-full flex items-center justify-center shrink-0 transition-all",
+                              isRejectedStep ? "bg-red-500" :
+                              done ? "bg-primary" :
+                              active ? "bg-primary ring-4 ring-primary/20" :
+                              "bg-slate-200"
+                            )}>
+                              {isRejectedStep ? <span className="text-white text-sm font-bold">×</span>
+                              : done ? <Check size={16} className="text-white" />
+                              : active ? <span className="size-2.5 rounded-full bg-white animate-pulse" />
+                              : <span className="text-[11px] font-bold text-slate-400">{i + 1}</span>}
+                            </div>
+                            <p className={cn(
+                              "text-xs font-semibold mt-2 text-center",
+                              isRejectedStep ? "text-red-600" :
+                              (done || active) ? "text-primary" : "text-slate-400"
+                            )}>{isRejectedStep ? "Rejected" : step.label}</p>
+                            <p className="text-[10px] text-muted-foreground text-center mt-0.5">{isRejectedStep ? "Declined" : step.desc}</p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
+
+                <div className="mt-6 pt-5 border-t text-center">
+                  <p className="text-sm text-muted-foreground">{meta.desc}</p>
+                  {storeData?.storeNote && (
+                    <p className="text-sm mt-3 rounded-lg bg-slate-50 border px-3 py-2 text-left">
+                      <strong>Note from our team:</strong> {storeData.storeNote}
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Published — show store links */}
+          {s === "PUBLISHED" && (
+            <div className="grid sm:grid-cols-2 gap-3">
+              <a href={storeData?.playStoreUrl || "#"} target="_blank" rel="noreferrer"
+                className={cn("rounded-xl border-2 p-4 flex flex-col gap-2 transition-colors",
+                  storeData?.playStoreUrl ? "hover:border-primary/40" : "opacity-40 pointer-events-none")}>
+                <div className="flex items-center gap-3">
+                  <div className="size-11 rounded-lg bg-white border flex items-center justify-center shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="https://img.icons8.com/color/96/google-play.png" alt="Google Play" width={24} height={24} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Get it on</p>
+                    <p className="font-bold text-sm leading-tight">Google Play</p>
+                    <p className="text-xs text-primary font-medium">{storeData?.playStoreUrl ? "View listing →" : "Not linked yet"}</p>
+                  </div>
+                </div>
+                {storeData?.playStoreUrl && (
+                  <code className="text-[10px] text-muted-foreground bg-slate-50 border rounded px-2 py-1 break-all leading-snug">
+                    {storeData.playStoreUrl}
+                  </code>
+                )}
+              </a>
+              <a href={storeData?.appStoreUrl || "#"} target="_blank" rel="noreferrer"
+                className={cn("rounded-xl border-2 p-4 flex flex-col gap-2 transition-colors",
+                  storeData?.appStoreUrl ? "hover:border-primary/40" : "opacity-40 pointer-events-none")}>
+                <div className="flex items-center gap-3">
+                  <div className="size-11 rounded-lg bg-black flex items-center justify-center shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="https://cdn.simpleicons.org/apple/white" alt="App Store" width={22} height={22} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Download on the</p>
+                    <p className="font-bold text-sm leading-tight">App Store</p>
+                    <p className="text-xs text-primary font-medium">{storeData?.appStoreUrl ? "View listing →" : "Not linked yet"}</p>
+                  </div>
+                </div>
+                {storeData?.appStoreUrl && (
+                  <code className="text-[10px] text-muted-foreground bg-slate-50 border rounded px-2 py-1 break-all leading-snug">
+                    {storeData.appStoreUrl}
+                  </code>
+                )}
+              </a>
+            </div>
+          )}
+
+          {/* Request button */}
+          {(s === "NONE" || s === "REJECTED") && (
+            <Card className="border-2">
+              <CardContent className="pt-5 pb-5 space-y-4">
+                <div>
+                  <p className="text-sm font-semibold">Request store publishing</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    We&apos;ll prepare your branded app for both stores, handle the
+                    submission, and add the live links here once approved. Store review typically takes 2–3 months.
+                  </p>
+                </div>
+
+                {/* Target stores */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border-2 border-dashed p-4 flex items-center gap-3">
+                    <div className="size-11 rounded-lg bg-white border flex items-center justify-center shrink-0">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="https://img.icons8.com/color/96/google-play.png" alt="Google Play" width={24} height={24} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Get it on</p>
+                      <p className="font-bold text-sm leading-tight">Google Play</p>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border-2 border-dashed p-4 flex items-center gap-3">
+                    <div className="size-11 rounded-lg bg-black flex items-center justify-center shrink-0">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="https://cdn.simpleicons.org/apple/white" alt="App Store" width={22} height={22} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Download on the</p>
+                      <p className="font-bold text-sm leading-tight">App Store</p>
+                    </div>
+                  </div>
+                </div>
+
+                {!configReady && (
+                  <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    Publish your app config first (App Config tab) before requesting store publishing.
+                  </p>
+                )}
+                <Button onClick={handleRequestStore} disabled={isRequestingStore || !configReady} className="gap-2">
+                  {isRequestingStore ? <Loader2 size={15} className="animate-spin" /> : <Rocket size={15} />}
+                  Request Publishing
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Target stores preview while in progress */}
+          {(s === "REQUESTED" || s === "IN_REVIEW") && (
+            <>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="rounded-xl border-2 p-4 flex items-center gap-3 bg-slate-50/50">
+                  <div className="size-11 rounded-lg bg-white border flex items-center justify-center shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="https://img.icons8.com/color/96/google-play.png" alt="Google Play" width={24} height={24} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Get it on</p>
+                    <p className="font-bold text-sm leading-tight">Google Play</p>
+                    <p className="text-xs text-amber-600">Preparing…</p>
+                  </div>
+                </div>
+                <div className="rounded-xl border-2 p-4 flex items-center gap-3 bg-slate-50/50">
+                  <div className="size-11 rounded-lg bg-black flex items-center justify-center shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="https://cdn.simpleicons.org/apple/white" alt="App Store" width={22} height={22} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Download on the</p>
+                    <p className="font-bold text-sm leading-tight">App Store</p>
+                    <p className="text-xs text-amber-600">Preparing…</p>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-center text-muted-foreground">
+                Store review typically takes 2–3 months. We&apos;ll update this page once your app is live.
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   // ── GENERATING ──────────────────────────────────────────────────────────────
   if (isGenerating) {
@@ -340,6 +616,14 @@ export default function MobileAppManagement() {
 
   // ── PUBLISHED ────────────────────────────────────────────────────────────────
   if (isPublished) {
+    // EAS Build install link — installs the real BizSpark APK once (no laptop, works anywhere).
+    const installUrl = process.env.NEXT_PUBLIC_MOBILE_INSTALL_URL
+      || "https://expo.dev/accounts/adithaf7/projects/bizpark-mobile/builds/eb04861b-de2f-46db-a1cb-cf9c07ce4085"
+    // Per-business deep link — opens the installed app showing THIS business's branding.
+    const appScheme = process.env.NEXT_PUBLIC_MOBILE_SCHEME || "bizpark"
+    const deepLink = `${appScheme}://?tenant=${activeBiz.id}`
+    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(deepLink)}`
+
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -352,17 +636,54 @@ export default function MobileAppManagement() {
           </Button>
         </div>
 
+        <TabNav />
+
         <div className="rounded-2xl border-2 border-green-200 bg-green-50 px-6 py-5 flex items-center gap-4">
           <div className="size-10 rounded-full bg-green-500 flex items-center justify-center shrink-0">
             <Check size={20} className="text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-green-800">Your mobile app config is live!</p>
+            <p className="font-bold text-green-800">Your mobile app is live!</p>
             <p className="text-sm text-green-700 mt-0.5">
-              The AI-generated configuration has been saved. Your mobile app template will use this config at runtime.
+              Scan the QR with your phone camera to open your branded {activeBiz.name} app.
             </p>
           </div>
         </div>
+
+        {/* ── Per-business QR — opens the installed app with THIS tenant's branding ── */}
+        <Card className="border-2">
+          <CardContent className="pt-6 pb-6 flex flex-col sm:flex-row items-center gap-6">
+            <div className="rounded-xl border-2 border-slate-100 p-3 bg-white shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={qrSrc} alt={`Open ${activeBiz.name} app`} width={200} height={200} className="rounded-lg" />
+            </div>
+            <div className="flex-1 space-y-3 text-center sm:text-left">
+              <div>
+                <p className="font-bold text-lg flex items-center gap-2 justify-center sm:justify-start">
+                  <Smartphone size={18} className="text-primary" /> Open your app
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Scan with your phone camera — the app opens showing <strong>{activeBiz.name}</strong>&apos;s
+                  branding, products and content.
+                </p>
+              </div>
+              <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                <li><strong>First time?</strong> Install the app once (link below)</li>
+                <li>Open your phone <strong>Camera</strong> → point at this QR</li>
+                <li>The app opens as your {activeBiz.name} app</li>
+              </ol>
+              <div className="flex flex-col gap-1 pt-1">
+                <code className="text-[11px] text-muted-foreground bg-slate-50 border rounded px-2 py-1.5 break-all">
+                  {deepLink}
+                </code>
+                <a href={installUrl} target="_blank" rel="noreferrer"
+                  className="text-xs text-primary font-medium underline underline-offset-2">
+                  First time? Install the app →
+                </a>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card className="border-2">
           <CardHeader className="pb-2 pt-4 px-5">
@@ -403,6 +724,8 @@ export default function MobileAppManagement() {
         </p>
       </div>
 
+      <TabNav />
+
       <div className="max-w-lg">
         <Card className="border-2">
           <CardContent className="pt-6 space-y-6">
@@ -441,7 +764,7 @@ export default function MobileAppManagement() {
         </Card>
 
         <p className="text-xs text-center text-muted-foreground mt-3">
-          Powered by GPT-4o · 15–30 seconds · Review before publishing
+          AI-powered · 15–30 seconds · Review before publishing
         </p>
       </div>
     </div>
