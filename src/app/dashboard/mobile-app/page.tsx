@@ -616,9 +616,13 @@ export default function MobileAppManagement() {
 
   // ── PUBLISHED ────────────────────────────────────────────────────────────────
   if (isPublished) {
-    const expoBase = (process.env.NEXT_PUBLIC_EXPO_URL || "exp://10.193.30.83:8081").replace(/\/$/, "")
-    const expoDeepLink = `${expoBase}/--/?tenant=${activeBiz.id}`
-    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(expoDeepLink)}`
+    // EAS Build install link — installs the real BizSpark APK once (no laptop, works anywhere).
+    const installUrl = process.env.NEXT_PUBLIC_MOBILE_INSTALL_URL
+      || "https://expo.dev/accounts/adithaf7/projects/bizpark-mobile/builds/eb04861b-de2f-46db-a1cb-cf9c07ce4085"
+    // Per-business deep link — opens the installed app showing THIS business's branding.
+    const appScheme = process.env.NEXT_PUBLIC_MOBILE_SCHEME || "bizpark"
+    const deepLink = `${appScheme}://?tenant=${activeBiz.id}`
+    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(deepLink)}`
 
     return (
       <div className="space-y-6">
@@ -639,38 +643,44 @@ export default function MobileAppManagement() {
             <Check size={20} className="text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-green-800">Your mobile app config is live!</p>
+            <p className="font-bold text-green-800">Your mobile app is live!</p>
             <p className="text-sm text-green-700 mt-0.5">
-              Scan the QR code below with the <strong>Expo Go</strong> app to preview your branded mobile app.
+              Scan the QR with your phone camera to open your branded {activeBiz.name} app.
             </p>
           </div>
         </div>
 
-        {/* ── QR Code — scan to open the live app ── */}
+        {/* ── Per-business QR — opens the installed app with THIS tenant's branding ── */}
         <Card className="border-2">
           <CardContent className="pt-6 pb-6 flex flex-col sm:flex-row items-center gap-6">
             <div className="rounded-xl border-2 border-slate-100 p-3 bg-white shrink-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={qrSrc} alt="Scan to open mobile app" width={200} height={200} className="rounded-lg" />
+              <img src={qrSrc} alt={`Open ${activeBiz.name} app`} width={200} height={200} className="rounded-lg" />
             </div>
             <div className="flex-1 space-y-3 text-center sm:text-left">
               <div>
                 <p className="font-bold text-lg flex items-center gap-2 justify-center sm:justify-start">
-                  <Smartphone size={18} className="text-primary" /> Preview on your phone
+                  <Smartphone size={18} className="text-primary" /> Open your app
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Install <strong>Expo Go</strong> (App Store / Play Store), then scan this QR code.
-                  Your phone must be on the same Wi-Fi as the dev server.
+                  Scan with your phone camera — the app opens showing <strong>{activeBiz.name}</strong>&apos;s
+                  branding, products and content.
                 </p>
               </div>
               <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                <li>Open the <strong>Expo Go</strong> app</li>
-                <li>Tap <strong>Scan QR Code</strong></li>
-                <li>Point at the code — your {activeBiz.name} app loads live</li>
+                <li><strong>First time?</strong> Install the app once (link below)</li>
+                <li>Open your phone <strong>Camera</strong> → point at this QR</li>
+                <li>The app opens as your {activeBiz.name} app</li>
               </ol>
-              <code className="block text-[11px] text-muted-foreground bg-slate-50 border rounded px-2 py-1.5 break-all">
-                {expoDeepLink}
-              </code>
+              <div className="flex flex-col gap-1 pt-1">
+                <code className="text-[11px] text-muted-foreground bg-slate-50 border rounded px-2 py-1.5 break-all">
+                  {deepLink}
+                </code>
+                <a href={installUrl} target="_blank" rel="noreferrer"
+                  className="text-xs text-primary font-medium underline underline-offset-2">
+                  First time? Install the app →
+                </a>
+              </div>
             </div>
           </CardContent>
         </Card>
