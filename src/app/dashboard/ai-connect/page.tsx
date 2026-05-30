@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { apiClient } from "@/lib/api-client"
 
-const MCP_SERVER_URL = process.env.NEXT_PUBLIC_MCP_URL || "http://localhost:3004"
+const MCP_SERVER_URL = process.env.NEXT_PUBLIC_MCP_URL || "http://localhost:3006"
 
 type ApiKey = {
   id: string
