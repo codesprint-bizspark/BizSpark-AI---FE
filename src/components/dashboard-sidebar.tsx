@@ -3,16 +3,17 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
-import { 
-  LayoutDashboard, 
-  Globe, 
-  Share2, 
+import {
+  LayoutDashboard,
+  Globe,
+  Share2,
   MessageSquareText,
-  Package, 
-  Settings, 
+  Package,
+  Settings,
   Zap,
   Users,
-  Sparkles
+  Sparkles,
+  Bot
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -34,6 +35,7 @@ const menuItems = [
   { icon: Package, label: "Products", href: "/dashboard/products" },
   { icon: Users, label: "Team Management", href: "/dashboard/team" },
   { icon: Settings, label: "Domains", href: "/dashboard/domains" },
+  { icon: Bot, label: "AI Connect", href: "/dashboard/ai-connect" },
 ]
 
 export function DashboardSidebar() {
