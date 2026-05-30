@@ -84,18 +84,6 @@ export function DashboardSidebar() {
           ))}
         </SidebarMenu>
       </SidebarContent>
-      <SidebarFooter className="p-4">
-        <div className="bg-white border rounded-xl p-4 group-data-[collapsible=icon]:hidden shadow-sm">
-          <div className="flex items-center gap-2 mb-2 text-primary">
-            <Sparkles size={14} className="animate-pulse" />
-            <p className="text-[10px] font-bold uppercase tracking-wider">AI Assistant Ready</p>
-          </div>
-          <p className="text-xs text-muted-foreground mb-3 leading-relaxed">Managing <strong>{activeName}</strong>. Upgrade to unlock Veo-3 video generation.</p>
-          <button className="w-full py-2 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-all shadow-lg shadow-slate-200">
-            Go Premium
-          </button>
-        </div>
-      </SidebarFooter>
     </Sidebar>
   )
 }
