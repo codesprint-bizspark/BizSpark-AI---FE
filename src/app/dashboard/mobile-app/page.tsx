@@ -19,7 +19,7 @@ const TONES = [
 
 const STEPS = [
   { key: "QUEUED",           label: "Sending to AI",        desc: "Request queued"                         },
-  { key: "PROCESSING",       label: "Building your app",    desc: "GPT-4o is crafting your mobile config"  },
+  { key: "PROCESSING",       label: "Building your app",    desc: "AI is crafting your mobile config"  },
   { key: "PENDING_APPROVAL", label: "Ready to review",      desc: "Config generated — awaiting you"        },
 ]
 
@@ -340,6 +340,10 @@ export default function MobileAppManagement() {
 
   // ── PUBLISHED ────────────────────────────────────────────────────────────────
   if (isPublished) {
+    const expoBase = (process.env.NEXT_PUBLIC_EXPO_URL || "exp://10.193.30.83:8081").replace(/\/$/, "")
+    const expoDeepLink = `${expoBase}/--/?tenant=${activeBiz.id}`
+    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(expoDeepLink)}`
+
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -359,10 +363,39 @@ export default function MobileAppManagement() {
           <div className="flex-1 min-w-0">
             <p className="font-bold text-green-800">Your mobile app config is live!</p>
             <p className="text-sm text-green-700 mt-0.5">
-              The AI-generated configuration has been saved. Your mobile app template will use this config at runtime.
+              Scan the QR code below with the <strong>Expo Go</strong> app to preview your branded mobile app.
             </p>
           </div>
         </div>
+
+        {/* ── QR Code — scan to open the live app ── */}
+        <Card className="border-2">
+          <CardContent className="pt-6 pb-6 flex flex-col sm:flex-row items-center gap-6">
+            <div className="rounded-xl border-2 border-slate-100 p-3 bg-white shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={qrSrc} alt="Scan to open mobile app" width={200} height={200} className="rounded-lg" />
+            </div>
+            <div className="flex-1 space-y-3 text-center sm:text-left">
+              <div>
+                <p className="font-bold text-lg flex items-center gap-2 justify-center sm:justify-start">
+                  <Smartphone size={18} className="text-primary" /> Preview on your phone
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Install <strong>Expo Go</strong> (App Store / Play Store), then scan this QR code.
+                  Your phone must be on the same Wi-Fi as the dev server.
+                </p>
+              </div>
+              <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                <li>Open the <strong>Expo Go</strong> app</li>
+                <li>Tap <strong>Scan QR Code</strong></li>
+                <li>Point at the code — your {activeBiz.name} app loads live</li>
+              </ol>
+              <code className="block text-[11px] text-muted-foreground bg-slate-50 border rounded px-2 py-1.5 break-all">
+                {expoDeepLink}
+              </code>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card className="border-2">
           <CardHeader className="pb-2 pt-4 px-5">
@@ -441,7 +474,7 @@ export default function MobileAppManagement() {
         </Card>
 
         <p className="text-xs text-center text-muted-foreground mt-3">
-          Powered by GPT-4o · 15–30 seconds · Review before publishing
+          AI-powered · 15–30 seconds · Review before publishing
         </p>
       </div>
     </div>
