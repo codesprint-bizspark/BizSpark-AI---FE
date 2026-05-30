@@ -95,8 +95,8 @@ export default function AiConnectPage() {
   const configJson = (key: string) => JSON.stringify({
     mcpServers: {
       bizspark: {
-        url: sseUrl,
-        headers: { Authorization: `Bearer ${key}` },
+        command: "mcp-remote",
+        args: [sseUrl, "--header", `Authorization:Bearer ${key}`],
       },
     },
   }, null, 2)
@@ -124,9 +124,9 @@ export default function AiConnectPage() {
           <p className="text-sm font-semibold mb-3">How it works</p>
           <ol className="text-sm text-muted-foreground space-y-1.5 list-decimal list-inside">
             <li>Generate an API key below</li>
-            <li>Copy the Claude Desktop config</li>
-            <li>Paste it into your Claude Desktop settings</li>
-            <li>Ask Claude about your business: reviews, social posts, website, and more</li>
+            <li>Install <code className="text-xs bg-slate-200 px-1 rounded">mcp-remote</code> once: <code className="text-xs bg-slate-200 px-1 rounded">npm install -g mcp-remote</code></li>
+            <li>Copy the Claude Desktop config and paste into your Claude Desktop settings</li>
+            <li>Ask Claude about your store: products, orders, customers, revenue, and more</li>
           </ol>
         </CardContent>
       </Card>
