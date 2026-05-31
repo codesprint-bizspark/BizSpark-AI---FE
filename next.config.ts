@@ -1,7 +1,11 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Self-contained server build for Docker/k8s (.next/standalone).
+  output: 'standalone',
+  // Served at root on the apex host (bizspark.randitha.net). Set
+  // NEXT_PUBLIC_BASE_PATH only if hosting under a sub-path.
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || undefined,
   typescript: {
     ignoreBuildErrors: true,
   },
