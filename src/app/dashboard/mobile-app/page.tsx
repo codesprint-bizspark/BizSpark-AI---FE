@@ -622,7 +622,11 @@ export default function MobileAppManagement() {
     // Per-business deep link — opens the installed app showing THIS business's branding.
     const appScheme = process.env.NEXT_PUBLIC_MOBILE_SCHEME || "bizpark"
     const deepLink = `${appScheme}://?tenant=${activeBiz.id}`
-    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(deepLink)}`
+    // QR encodes an https "open" page (scanners can open https, not custom schemes).
+    // That page bounces into the app via the deep link, with an install fallback.
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://bizspark.randitha.net"
+    const openUrl = `${origin}/m?tenant=${activeBiz.id}`
+    const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(openUrl)}`
 
     return (
       <div className="space-y-6">
