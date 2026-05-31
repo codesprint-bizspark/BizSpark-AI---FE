@@ -56,9 +56,9 @@ jobs:
           push: true
           build-args: |
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || '/api' }}
-            NEXT_PUBLIC_COMMERCE_URL=${{ vars.NEXT_PUBLIC_COMMERCE_URL || 'https://commerce.bizspark.randitha.net' }}
-            NEXT_PUBLIC_STOREFRONT_URL=${{ vars.NEXT_PUBLIC_STOREFRONT_URL || 'https://store.bizspark.randitha.net' }}
-            NEXT_PUBLIC_MCP_URL=${{ vars.NEXT_PUBLIC_MCP_URL || 'https://admin.bizspark.randitha.net' }}
+            NEXT_PUBLIC_COMMERCE_URL=${{ vars.NEXT_PUBLIC_COMMERCE_URL || 'https://commerce.randitha.net' }}
+            NEXT_PUBLIC_STOREFRONT_URL=${{ vars.NEXT_PUBLIC_STOREFRONT_URL || 'https://store.randitha.net' }}
+            NEXT_PUBLIC_MCP_URL=${{ vars.NEXT_PUBLIC_MCP_URL || 'https://admin.randitha.net' }}
             NEXT_PUBLIC_MOBILE_INSTALL_URL=${{ vars.NEXT_PUBLIC_MOBILE_INSTALL_URL }}
             NEXT_PUBLIC_MOBILE_SCHEME=${{ vars.NEXT_PUBLIC_MOBILE_SCHEME || 'bizpark' }}
             NEXT_PUBLIC_BASE_PATH=${{ vars.NEXT_PUBLIC_BASE_PATH }}
