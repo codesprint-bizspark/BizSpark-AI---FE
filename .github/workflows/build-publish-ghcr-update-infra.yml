@@ -28,7 +28,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       digest: ${{ steps.build.outputs.digest }}
+      has_infra_token: ${{ steps.tok.outputs.present }}
     steps:
+      - name: Check Infra token presence
+        id: tok
+        run: echo "present=${{ secrets.INFRA_REPO_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -67,6 +72,8 @@ jobs:
     name: Pin frontend digest in Infra
     runs-on: ubuntu-latest
     needs: build-and-push
+    # Skips cleanly (run stays green) until INFRA_REPO_TOKEN is added to this repo.
+    if: needs.build-and-push.outputs.has_infra_token == 'true'
     steps:
       - name: Checkout Infra
         uses: actions/checkout@v4
