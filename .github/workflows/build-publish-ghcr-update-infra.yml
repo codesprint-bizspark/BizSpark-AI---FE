@@ -1,0 +1,107 @@
+name: Build GHCR Image and Update Infra
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ghcr-frontend-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: codesprint-bizspark
+  IMAGE_NAME: bizpark-frontend
+  INFRA_REPO: codesprint-bizspark/Infra
+  INFRA_BRANCH: main
+  INFRA_WORKLOADS_PATH: apps/bizpark/base/workloads.yaml
+
+jobs:
+  build-and-push:
+    name: Build and push frontend
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || '/api' }}
+            NEXT_PUBLIC_COMMERCE_URL=${{ vars.NEXT_PUBLIC_COMMERCE_URL || '/' }}
+            NEXT_PUBLIC_MCP_URL=${{ vars.NEXT_PUBLIC_MCP_URL }}
+            NEXT_PUBLIC_MOBILE_INSTALL_URL=${{ vars.NEXT_PUBLIC_MOBILE_INSTALL_URL }}
+            NEXT_PUBLIC_MOBILE_SCHEME=${{ vars.NEXT_PUBLIC_MOBILE_SCHEME || 'bizpark' }}
+            NEXT_PUBLIC_BASE_PATH=${{ vars.NEXT_PUBLIC_BASE_PATH || '/app' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+  update-infra:
+    name: Pin frontend digest in Infra
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - name: Checkout Infra
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.INFRA_REPO }}
+          ref: ${{ env.INFRA_BRANCH }}
+          token: ${{ secrets.INFRA_REPO_TOKEN }}
+
+      - name: Pin frontend image digest
+        env:
+          DIGEST: ${{ needs.build-and-push.outputs.digest }}
+        run: |
+          python3 - "$INFRA_WORKLOADS_PATH" <<'PY'
+          import os, re, sys
+          path = sys.argv[1]
+          digest = os.environ["DIGEST"].strip()
+          image = "ghcr.io/codesprint-bizspark/bizpark-frontend"
+          text = open(path, encoding="utf-8").read()
+          # Replace the frontend image reference (tag or existing digest) with the new digest.
+          pattern = re.compile(rf"(image:\s*){re.escape(image)}(?:@sha256:[a-f0-9]+|:[\w.\-]+)?")
+          new_text, n = pattern.subn(rf"\g<1>{image}@{digest}", text)
+          if n == 0:
+              raise SystemExit(f"frontend image line not found in {path}")
+          open(path, "w", encoding="utf-8").write(new_text)
+          print(f"Pinned {image}@{digest} ({n} occurrence(s))")
+          PY
+
+      - name: Commit Infra update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "Frontend digest already up to date."
+            exit 0
+          fi
+          git add "${INFRA_WORKLOADS_PATH}"
+          git commit -m "chore: update bizpark-frontend image for ${GITHUB_SHA::7}"
+          git push origin "${INFRA_BRANCH}"
