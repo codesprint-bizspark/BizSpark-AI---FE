@@ -92,7 +92,6 @@ export default function AiConnectPage() {
   }
 
   const sseUrl = `${MCP_SERVER_URL}/sse`
-  const webConnectorUrl = (key: string) => `${sseUrl}?key=${key}`
   const configJson = (key: string) => JSON.stringify({
     mcpServers: {
       bizspark: {
@@ -125,7 +124,7 @@ export default function AiConnectPage() {
           <p className="text-sm font-semibold mb-3">How it works</p>
           <ol className="text-sm text-muted-foreground space-y-1.5 list-decimal list-inside">
             <li>Generate an API key below</li>
-            <li><span className="font-medium text-slate-700">Claude.ai (web):</span> Settings → Connectors → Add custom connector → paste the connector URL</li>
+            <li><span className="font-medium text-slate-700">Claude.ai (web):</span> Settings → Connectors → Add custom connector → paste the SSE URL → Connect → paste your key on the BizSpark sign-in page</li>
             <li><span className="font-medium text-slate-700">Claude Desktop:</span> install <code className="text-xs bg-slate-200 px-1 rounded">mcp-remote</code> (<code className="text-xs bg-slate-200 px-1 rounded">npm i -g mcp-remote</code>), then paste the config into settings</li>
             <li>Ask Claude about your store: products, orders, customers, revenue, and more</li>
           </ol>
@@ -169,12 +168,13 @@ export default function AiConnectPage() {
                 <p className="text-xs font-semibold text-slate-600 mb-1.5">Claude.ai (web) — add as a custom connector:</p>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 text-xs bg-white border rounded px-3 py-2 font-mono break-all">
-                    {webConnectorUrl(newKey)}
+                    {sseUrl}
                   </code>
-                  <CopyButton text={webConnectorUrl(newKey)} label="Copy URL" />
+                  <CopyButton text={sseUrl} label="Copy URL" />
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Settings → Connectors → Add custom connector → paste this URL → Connect.
+                  Settings → Connectors → Add custom connector → paste this URL → Connect, then
+                  paste the key above on the BizSpark sign-in page that appears.
                 </p>
               </div>
 
