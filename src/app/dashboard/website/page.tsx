@@ -367,7 +367,7 @@ export default function WebsiteManagement() {
 
   // ── PUBLISHED ────────────────────────────────────────────────────────────────
   if (isPublished) {
-    const commerceBase = (process.env.NEXT_PUBLIC_COMMERCE_URL || 'http://localhost:3004').replace(/\/$/, '')
+    const commerceBase = (process.env.NEXT_PUBLIC_STOREFRONT_URL || process.env.NEXT_PUBLIC_COMMERCE_URL || 'http://localhost:3004').replace(/\/$/, '')
     const storefrontUrl = `${commerceBase}/?tenant=${activeBiz.id}`
     return (
       <div className="space-y-6">
