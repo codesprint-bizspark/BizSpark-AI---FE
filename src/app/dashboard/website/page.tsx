@@ -1,7 +1,9 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import { ExternalLink, RefreshCw, Sparkles, Check, Loader2, Rocket, Eye } from "lucide-react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { ExternalLink, RefreshCw, Sparkles, Check, Loader2, Pencil, Eye } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -22,13 +24,12 @@ const STEPS = [
 ]
 
 export default function WebsiteManagement() {
+  const router = useRouter()
   const { toast } = useToast()
   const [activeBiz, setActiveBiz]         = useState<any>(null)
   const [deployStatus, setDeployStatus]   = useState<string | null>(null)
-  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null)
-  const [generatedContent, setGeneratedContent] = useState<any>(null)
+  const [, setCurrentTaskId] = useState<string | null>(null)
   const [isGenerating, setIsGenerating]   = useState(false)
-  const [isApproving, setIsApproving]     = useState(false)
   const [isPublished, setIsPublished]     = useState(false)
   const [adminCredentials, setAdminCredentials] = useState<{ email: string; password: string } | null>(null)
   const [isRevealing, setIsRevealing]     = useState(false)
@@ -45,7 +46,8 @@ export default function WebsiteManagement() {
         if (res.data) {
           setActiveBiz(res.data)
           if (res.data.websites?.length > 0) {
-            setIsPublished(true)
+            const website = res.data.websites[0]
+            if (website.status === "PUBLISHED") setIsPublished(true)
             const stored = localStorage.getItem(`admin_creds_${res.data.id}`)
             if (stored) setAdminCredentials(JSON.parse(stored))
           }
@@ -66,8 +68,8 @@ export default function WebsiteManagement() {
 
         if (task.status === "PENDING_APPROVAL") {
           clearInterval(pollingRef.current!)
-          setGeneratedContent(task.outputData?.generatedContent)
           setIsGenerating(false)
+          router.push(`/dashboard/website/editor?taskId=${taskId}`)
         }
         if (task.status === "FAILED") {
           clearInterval(pollingRef.current!)
@@ -82,7 +84,6 @@ export default function WebsiteManagement() {
     if (!activeBiz) return
     setIsGenerating(true)
     setIsPublished(false)
-    setGeneratedContent(null)
     setDeployStatus("QUEUED")
 
     try {
@@ -117,37 +118,6 @@ export default function WebsiteManagement() {
     } finally {
       setIsRevealing(false)
     }
-  }
-
-  const handleApprove = async () => {
-    if (!currentTaskId || !generatedContent) return
-    setIsApproving(true)
-    try {
-      const res = await apiClient.post(`/agents/tasks/${currentTaskId}/approve`, { content: generatedContent })
-      const creds = res.adminCredentials
-        ?? JSON.parse(localStorage.getItem(`admin_creds_${activeBiz?.id}`) || "null")
-      if (creds) {
-        setAdminCredentials(creds)
-        if (activeBiz?.id) localStorage.setItem(`admin_creds_${activeBiz.id}`, JSON.stringify(creds))
-      }
-      setIsPublished(true)
-      setGeneratedContent(null)
-      setDeployStatus("COMPLETED")
-    } catch (e: any) {
-      toast({ title: "Publish failed", description: e.message, variant: "destructive" })
-    } finally {
-      setIsApproving(false)
-    }
-  }
-
-  const handleReject = async () => {
-    if (!currentTaskId) return
-    try {
-      await apiClient.post(`/agents/tasks/${currentTaskId}/reject`, {})
-    } catch { /* best-effort */ }
-    setGeneratedContent(null)
-    setDeployStatus(null)
-    setCurrentTaskId(null)
   }
 
   if (!activeBiz) return null
@@ -210,164 +180,9 @@ export default function WebsiteManagement() {
     )
   }
 
-  // ── APPROVE ──────────────────────────────────────────────────────────────────
-  if (generatedContent && deployStatus === "PENDING_APPROVAL") {
-    const g = generatedContent
-    const c = g.content ?? {}
-
-    const setG = (patch: any) => setGeneratedContent((prev: any) => ({ ...prev, ...patch }))
-    const setC = (patch: any) => setGeneratedContent((prev: any) => ({
-      ...prev, content: { ...(prev.content ?? {}), ...patch }
-    }))
-    const setFeature = (i: number, patch: any) => setGeneratedContent((prev: any) => {
-      const features = [...(prev.content?.features ?? [])]
-      features[i] = { ...features[i], ...patch }
-      return { ...prev, content: { ...(prev.content ?? {}), features } }
-    })
-
-    const field = "w-full text-sm border rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30"
-    const textarea = "w-full text-xs border rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold font-headline flex items-center gap-2">
-              <Sparkles size={22} className="text-primary" /> Review & Edit
-            </h2>
-            <p className="text-muted-foreground mt-1">Edit any field, then publish to your storefront.</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleReject} disabled={isApproving}>
-              <RefreshCw size={14} className="mr-1.5" /> Redo
-            </Button>
-            <Button size="sm" onClick={handleApprove} disabled={isApproving} className="gap-2 px-5">
-              {isApproving
-                ? <><Loader2 size={14} className="animate-spin" /> Publishing…</>
-                : <><Rocket size={14} /> Publish Now</>}
-            </Button>
-          </div>
-        </div>
-
-        <div className="grid sm:grid-cols-2 gap-4">
-          {/* Branding */}
-          <Card className="border-2">
-            <CardHeader className="pb-2 pt-4 px-5">
-              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Branding</CardTitle>
-            </CardHeader>
-            <CardContent className="px-5 pb-5 space-y-3">
-              <input className={field} value={g.tagline ?? ""} onChange={e => setG({ tagline: e.target.value })} placeholder="Tagline" />
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5">
-                  <input type="color" value={g.primaryColor ?? "#2563eb"} onChange={e => setG({ primaryColor: e.target.value })}
-                    className="size-8 rounded cursor-pointer border" />
-                  <span className="text-xs text-muted-foreground">Primary</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <input type="color" value={g.secondaryColor ?? "#ffffff"} onChange={e => setG({ secondaryColor: e.target.value })}
-                    className="size-8 rounded cursor-pointer border" />
-                  <span className="text-xs text-muted-foreground">Secondary</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Announcement */}
-          <Card className="border-2">
-            <CardHeader className="pb-2 pt-4 px-5">
-              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Announcement Banner</CardTitle>
-            </CardHeader>
-            <CardContent className="px-5 pb-5">
-              <input className={field} value={c.announcement?.text ?? ""} placeholder="Announcement text"
-                onChange={e => setC({ announcement: { ...(c.announcement ?? {}), text: e.target.value, enabled: true } })} />
-            </CardContent>
-          </Card>
-
-          {/* Hero */}
-          <Card className="border-2">
-            <CardHeader className="pb-2 pt-4 px-5">
-              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Hero Section</CardTitle>
-            </CardHeader>
-            <CardContent className="px-5 pb-5 space-y-2">
-              <input className={field} value={c.hero?.title ?? ""} placeholder="Hero title"
-                onChange={e => setC({ hero: { ...(c.hero ?? {}), title: e.target.value } })} />
-              <textarea className={textarea} rows={2} value={c.hero?.subtitle ?? ""} placeholder="Hero subtitle"
-                onChange={e => setC({ hero: { ...(c.hero ?? {}), subtitle: e.target.value } })} />
-              <input className={field} value={c.hero?.ctaText ?? ""} placeholder="CTA button text"
-                onChange={e => setC({ hero: { ...(c.hero ?? {}), ctaText: e.target.value } })} />
-            </CardContent>
-          </Card>
-
-          {/* About */}
-          <Card className="border-2">
-            <CardHeader className="pb-2 pt-4 px-5">
-              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">About Section</CardTitle>
-            </CardHeader>
-            <CardContent className="px-5 pb-5 space-y-2">
-              <input className={field} value={c.about?.title ?? ""} placeholder="About title"
-                onChange={e => setC({ about: { ...(c.about ?? {}), title: e.target.value } })} />
-              <textarea className={textarea} rows={3} value={c.about?.text ?? ""} placeholder="About text"
-                onChange={e => setC({ about: { ...(c.about ?? {}), text: e.target.value } })} />
-            </CardContent>
-          </Card>
-
-          {/* Features */}
-          {c.features?.length > 0 && (
-            <Card className="border-2 sm:col-span-2">
-              <CardHeader className="pb-2 pt-4 px-5">
-                <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Features</CardTitle>
-              </CardHeader>
-              <CardContent className="px-5 pb-5">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {c.features.map((f: any, i: number) => (
-                    <div key={i} className="rounded-lg border bg-slate-50 px-3 py-2.5 space-y-1.5">
-                      <input className={field + " font-semibold"} value={f.title ?? ""} placeholder="Title"
-                        onChange={e => setFeature(i, { title: e.target.value })} />
-                      <textarea className={textarea} rows={2} value={f.description ?? ""} placeholder="Description"
-                        onChange={e => setFeature(i, { description: e.target.value })} />
-                      <span className="text-[10px] font-mono text-slate-400">{f.icon}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* SEO */}
-          <Card className="border-2">
-            <CardHeader className="pb-2 pt-4 px-5">
-              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">SEO</CardTitle>
-            </CardHeader>
-            <CardContent className="px-5 pb-5 space-y-2">
-              <textarea className={textarea} rows={2} value={c.seo?.metaDescription ?? ""} placeholder="Meta description"
-                onChange={e => setC({ seo: { ...(c.seo ?? {}), metaDescription: e.target.value } })} />
-              <input className={field} value={c.seo?.keywords ?? ""} placeholder="Keywords (comma separated)"
-                onChange={e => setC({ seo: { ...(c.seo ?? {}), keywords: e.target.value } })} />
-            </CardContent>
-          </Card>
-
-          {/* Contact */}
-          <Card className="border-2">
-            <CardHeader className="pb-2 pt-4 px-5">
-              <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Contact Email</CardTitle>
-            </CardHeader>
-            <CardContent className="px-5 pb-5">
-              <input className={field + " font-mono"} type="email" value={c.footer?.contactEmail ?? ""} placeholder="contact@yourbusiness.com"
-                onChange={e => setC({ footer: { ...(c.footer ?? {}), contactEmail: e.target.value } })} />
-            </CardContent>
-          </Card>
-        </div>
-
-        <p className="text-xs text-muted-foreground text-center">
-          Edit any field above, then hit <strong>Publish Now</strong>. Want a completely different result? Hit <strong>Redo</strong>.
-        </p>
-      </div>
-    )
-  }
-
   // ── PUBLISHED ────────────────────────────────────────────────────────────────
   if (isPublished) {
-    const commerceBase = (process.env.NEXT_PUBLIC_STOREFRONT_URL || process.env.NEXT_PUBLIC_COMMERCE_URL || 'http://localhost:3004').replace(/\/$/, '')
+    const commerceBase = (process.env.NEXT_PUBLIC_COMMERCE_WEB_URL || process.env.NEXT_PUBLIC_COMMERCE_URL || 'http://localhost:3004').replace(/\/$/, '')
     const storefrontUrl = `${commerceBase}/?tenant=${activeBiz.id}`
     return (
       <div className="space-y-6">
@@ -379,6 +194,11 @@ export default function WebsiteManagement() {
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => { setIsPublished(false); setDeployStatus(null); setCurrentTaskId(null) }} className="gap-2">
               <RefreshCw size={14} /> Regenerate
+            </Button>
+            <Button variant="outline" size="sm" className="gap-2" asChild>
+              <Link href="/dashboard/website/editor">
+                <Pencil size={14} /> Edit Website
+              </Link>
             </Button>
             <Button size="sm" className="gap-2" asChild>
               <a href={storefrontUrl} target="_blank" rel="noopener noreferrer">

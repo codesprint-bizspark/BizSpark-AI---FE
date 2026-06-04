@@ -92,5 +92,36 @@ export const apiClient = {
         return this.request(endpoint, {
             method: 'GET',
         });
-    }
+    },
+
+    async uploadFile(endpoint: string, file: File) {
+        const token = this.getAuthToken();
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            method: 'POST',
+            headers,
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Upload failed');
+        }
+
+        const text = await response.text();
+        return text ? JSON.parse(text) : {};
+    },
+
+    async getWebsiteConfig(businessId: string) {
+        return this.get(`/business/${businessId}/website/config`);
+    },
+
+    async patchWebsiteConfig(businessId: string, payload: Record<string, unknown>) {
+        return this.patch(`/business/${businessId}/website/config`, payload);
+    },
 };
