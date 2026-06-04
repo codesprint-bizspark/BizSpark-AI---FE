@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import EditableText from "./editable/EditableText"
 import EditableImage from "./editable/EditableImage"
@@ -47,14 +48,7 @@ export default function EditorCanvas({
         <nav className="bg-white border-b shadow-sm">
           <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-2 font-bold text-xl" style={{ color: primary }}>
-              {config.logoUrl
-                ? // eslint-disable-next-line @next/next/no-img-element
-                  <img src={config.logoUrl} alt="" className="size-8 rounded object-cover" />
-                : (
-                  <button type="button" onClick={() => onSelectSection('branding')} className="size-8 rounded border-2 border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400">
-                    Logo
-                  </button>
-                )}
+              <NavLogo url={config.logoUrl} onEdit={() => onSelectSection('branding')} />
               <EditableText
                 value={config.businessName}
                 onChange={v => onUpdateConfig({ businessName: v })}
@@ -210,5 +204,29 @@ export default function EditorCanvas({
         </footer>
       </SectionOutline>
     </div>
+  )
+}
+
+/** Navbar logo preview. Falls back to the "Logo" placeholder when the URL is
+ *  empty or the image fails to load (e.g. storage returns a non-image). */
+function NavLogo({ url, onEdit }: { url?: string | null; onEdit: () => void }) {
+  const [failed, setFailed] = useState(false)
+  useEffect(() => { setFailed(false) }, [url])
+
+  if (url && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={url}
+        alt=""
+        onError={() => setFailed(true)}
+        className="size-8 rounded object-cover"
+      />
+    )
+  }
+  return (
+    <button type="button" onClick={onEdit} className="size-8 rounded border-2 border-dashed border-gray-300 flex items-center justify-center text-xs text-gray-400">
+      Logo
+    </button>
   )
 }

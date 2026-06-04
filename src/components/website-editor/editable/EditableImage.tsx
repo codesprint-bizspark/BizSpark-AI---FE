@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { ImagePlus, Loader2, Link as LinkIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -31,7 +31,10 @@ export default function EditableImage({
 }: Props) {
   const [open, setOpen] = useState(false)
   const [urlInput, setUrlInput] = useState('')
+  const [failed, setFailed] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { setFailed(false) }, [value])
 
   const handleFile = async (file: File) => {
     if (!onUpload) return
@@ -51,13 +54,13 @@ export default function EditableImage({
           className,
         )}
       >
-        {value ? (
+        {value && !failed ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt={label} className="absolute inset-0 w-full h-full object-cover" />
+          <img src={value} alt={label} onError={() => setFailed(true)} className="absolute inset-0 w-full h-full object-cover" />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-gray-400 bg-gray-50">
             <ImagePlus className="size-8" />
-            <span className="text-sm">Click to add {label.toLowerCase()}</span>
+            <span className="text-sm">{value ? `Couldn't load ${label.toLowerCase()} — click to replace` : `Click to add ${label.toLowerCase()}`}</span>
           </div>
         )}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
