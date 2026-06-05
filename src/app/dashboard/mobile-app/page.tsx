@@ -1,14 +1,18 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   Smartphone, RefreshCw, Sparkles, Check, Loader2, Rocket
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { ToastAction } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
 import { apiClient } from "@/lib/api-client"
 import { useToast } from "@/hooks/use-toast"
+import { isQuotaError, isUsageExhausted, quotaErrorDescription, usageApi, type UsageSnapshot } from "@/lib/usage"
 
 const TONES = [
   { value: "professional", label: "Professional", emoji: "💼" },
@@ -24,6 +28,7 @@ const STEPS = [
 ]
 
 export default function MobileAppManagement() {
+  const router = useRouter()
   const { toast } = useToast()
   const [activeBiz, setActiveBiz]               = useState<any>(null)
   const [deployStatus, setDeployStatus]         = useState<string | null>(null)
@@ -34,6 +39,7 @@ export default function MobileAppManagement() {
   const [isPublished, setIsPublished]           = useState(false)
   const [tone, setTone]                         = useState("professional")
   const [primaryColor, setPrimaryColor]         = useState("#3b82f6")
+  const [usage, setUsage]                       = useState<UsageSnapshot | null>(null)
   const [tab, setTabState]                      = useState<"config" | "stores">(() => {
     if (typeof window === "undefined") return "config"
     return (sessionStorage.getItem("bs_mobile_tab") as "config" | "stores") || "config"
@@ -45,6 +51,19 @@ export default function MobileAppManagement() {
   const [storeData, setStoreData]               = useState<any>(null)
   const [isRequestingStore, setIsRequestingStore] = useState(false)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
+
+  const showQuotaToast = (description: string) => {
+    toast({
+      title: "Plan limit reached",
+      description,
+      variant: "destructive",
+      action: (
+        <ToastAction altText="Open billing" onClick={() => router.push("/dashboard/settings?tab=billing")}>
+          Upgrade
+        </ToastAction>
+      ),
+    })
+  }
 
   const loadStoreStatus = async (bizId: string) => {
     try {
@@ -58,13 +77,17 @@ export default function MobileAppManagement() {
       const activeId = localStorage.getItem("active_biz_id")
       if (!activeId) return
       try {
-        const res = await apiClient.get(`/business/${activeId}`)
+        const [res, usageRes] = await Promise.all([
+          apiClient.get(`/business/${activeId}`),
+          usageApi.get().catch(() => null),
+        ])
         if (res.data) {
           setActiveBiz(res.data)
           if (res.data.mobileApps?.length > 0 && res.data.mobileApps[0].status === "PUBLISHED") {
             setIsPublished(true)
           }
         }
+        setUsage(usageRes)
         await loadStoreStatus(activeId)
       } catch (e) { console.error(e) }
     }
@@ -110,6 +133,10 @@ export default function MobileAppManagement() {
 
   const handleGenerate = async () => {
     if (!activeBiz) return
+    if (isUsageExhausted(usage, "mobileAppGenerations")) {
+      showQuotaToast("Mobile app generation limit reached. Upgrade in Plans & Billing to continue.")
+      return
+    }
     setIsGenerating(true)
     setIsPublished(false)
     setGeneratedContent(null)
@@ -121,10 +148,16 @@ export default function MobileAppManagement() {
       const taskId = res?.data?.taskId
       if (!taskId) throw new Error("No taskId returned")
       setCurrentTaskId(taskId)
+      usageApi.get().then(setUsage).catch(() => undefined)
       startPolling(taskId)
     } catch (e: any) {
       setIsGenerating(false)
       setDeployStatus(null)
+      if (isQuotaError(e)) {
+        showQuotaToast(quotaErrorDescription(e))
+        usageApi.get().then(setUsage).catch(() => undefined)
+        return
+      }
       toast({ title: "Failed to start generation", description: e.message, variant: "destructive" })
     }
   }
@@ -153,6 +186,7 @@ export default function MobileAppManagement() {
   }
 
   if (!activeBiz) return null
+  const mobileQuotaBlocked = isUsageExhausted(usage, "mobileAppGenerations")
 
   // ── Tab navigation (shown on settled screens) ────────────────────────────────
   const TabNav = () => (
@@ -761,9 +795,14 @@ export default function MobileAppManagement() {
               </div>
             </div>
 
-            <Button size="lg" className="w-full gap-2 h-12 text-base" onClick={handleGenerate}>
+            <Button size="lg" className="w-full gap-2 h-12 text-base" onClick={handleGenerate} disabled={mobileQuotaBlocked}>
               <Sparkles size={18} /> Generate Mobile App
             </Button>
+            {mobileQuotaBlocked && (
+              <p className="text-xs text-center text-destructive">
+                Mobile app limit reached. <Link href="/dashboard/settings?tab=billing" className="font-semibold underline">Upgrade plan</Link>
+              </p>
+            )}
           </CardContent>
         </Card>
 

@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { Bell, Sparkles, Check, MessageSquareText, Share2, Smartphone, CreditCard } from "lucide-react"
+import { Bell, Sparkles, Check, MessageSquareText, Share2, Smartphone, CreditCard, Gauge } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { apiClient } from "@/lib/api-client"
+import { formatQuotaNumber, quotaPercent, spentForUsage, usageApi, type UsageSnapshot } from "@/lib/usage"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +40,7 @@ const PLAN_STYLES: Record<string, string> = {
 export function DashboardTopbarActions() {
   const [bizId, setBizId] = useState("")
   const [planName, setPlanName] = useState("Free")
+  const [usage, setUsage] = useState<UsageSnapshot | null>(null)
   const [notices, setNotices] = useState<Notice[]>([])
 
   const loadNotices = useCallback(async (id: string) => {
@@ -80,11 +82,54 @@ export function DashboardTopbarActions() {
     apiClient.get(`/billing/status?businessId=${id}`)
       .then((res) => { if (res?.data?.planName) setPlanName(res.data.planName) })
       .catch(() => {})
+    usageApi.get()
+      .then((data) => {
+        setUsage(data)
+        if (data?.effectivePlan?.name) setPlanName(data.effectivePlan.name)
+      })
+      .catch(() => {})
     loadNotices(id)
   }, [loadNotices])
 
+  const tokenPercent = usage ? quotaPercent(usage, "monthlyTokens") : 0
+  const tokenSpent = usage ? spentForUsage(usage, "monthlyTokens") : 0
+  const tokenLimit = usage?.quotas.monthlyTokens ?? 0
+  const tokenTone = tokenPercent >= 100
+    ? "border-red-200 bg-red-50 text-red-700"
+    : tokenPercent >= 80
+      ? "border-amber-200 bg-amber-50 text-amber-700"
+      : "border-emerald-200 bg-emerald-50 text-emerald-700"
+  const tokenBar = tokenPercent >= 100
+    ? "bg-red-500"
+    : tokenPercent >= 80
+      ? "bg-amber-500"
+      : "bg-emerald-500"
+
   return (
     <div className="flex items-center gap-2">
+      {usage && (
+        <Link
+          href="/dashboard/settings?tab=billing"
+          className={cn(
+            "inline-flex h-9 min-w-0 items-center gap-2 rounded-full border px-3 text-xs font-bold transition-opacity hover:opacity-80",
+            tokenTone,
+          )}
+          title={`${formatQuotaNumber(tokenSpent, "monthlyTokens")} of ${formatQuotaNumber(tokenLimit, "monthlyTokens")} tokens used`}
+        >
+          <Gauge size={13} />
+          <span className="hidden sm:inline">Tokens</span>
+          <span className="tabular-nums">
+            {formatQuotaNumber(tokenSpent, "monthlyTokens")} / {formatQuotaNumber(tokenLimit, "monthlyTokens")}
+          </span>
+          <span className="hidden md:block h-1.5 w-16 overflow-hidden rounded-full bg-white/70">
+            <span
+              className={cn("block h-full rounded-full", tokenBar)}
+              style={{ width: `${tokenPercent}%` }}
+            />
+          </span>
+        </Link>
+      )}
+
       {/* Plan badge */}
       <Link
         href="/dashboard/settings?tab=billing"

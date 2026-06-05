@@ -6,9 +6,11 @@ import Link from "next/link"
 import { ExternalLink, RefreshCw, Sparkles, Check, Loader2, Pencil, Eye } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { ToastAction } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
 import { apiClient } from "@/lib/api-client"
 import { useToast } from "@/hooks/use-toast"
+import { isQuotaError, isUsageExhausted, quotaErrorDescription, usageApi, type UsageSnapshot } from "@/lib/usage"
 
 const TONES = [
   { value: "professional", label: "Professional", emoji: "💼" },
@@ -35,14 +37,31 @@ export default function WebsiteManagement() {
   const [isRevealing, setIsRevealing]     = useState(false)
   const [tone, setTone]                   = useState("professional")
   const [primaryColor, setPrimaryColor]   = useState("#2563eb")
+  const [usage, setUsage]                 = useState<UsageSnapshot | null>(null)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
+
+  const showQuotaToast = (description: string) => {
+    toast({
+      title: "Plan limit reached",
+      description,
+      variant: "destructive",
+      action: (
+        <ToastAction altText="Open billing" onClick={() => router.push("/dashboard/settings?tab=billing")}>
+          Upgrade
+        </ToastAction>
+      ),
+    })
+  }
 
   useEffect(() => {
     const fetchBiz = async () => {
       const activeId = localStorage.getItem("active_biz_id")
       if (!activeId) return
       try {
-        const res = await apiClient.get(`/business/${activeId}`)
+        const [res, usageRes] = await Promise.all([
+          apiClient.get(`/business/${activeId}`),
+          usageApi.get().catch(() => null),
+        ])
         if (res.data) {
           setActiveBiz(res.data)
           if (res.data.websites?.length > 0) {
@@ -52,6 +71,7 @@ export default function WebsiteManagement() {
             if (stored) setAdminCredentials(JSON.parse(stored))
           }
         }
+        setUsage(usageRes)
       } catch (e) { console.error(e) }
     }
     fetchBiz()
@@ -82,6 +102,10 @@ export default function WebsiteManagement() {
 
   const handleGenerate = async () => {
     if (!activeBiz) return
+    if (isUsageExhausted(usage, "websiteGenerations")) {
+      showQuotaToast("Website generation limit reached. Upgrade in Plans & Billing to continue.")
+      return
+    }
     setIsGenerating(true)
     setIsPublished(false)
     setDeployStatus("QUEUED")
@@ -94,10 +118,16 @@ export default function WebsiteManagement() {
       const taskId = res?.data?.taskId
       if (!taskId) throw new Error("No taskId returned")
       setCurrentTaskId(taskId)
+      usageApi.get().then(setUsage).catch(() => undefined)
       startPolling(taskId)
     } catch (e: any) {
       setIsGenerating(false)
       setDeployStatus(null)
+      if (isQuotaError(e)) {
+        showQuotaToast(quotaErrorDescription(e))
+        usageApi.get().then(setUsage).catch(() => undefined)
+        return
+      }
       toast({ title: "Failed to start generation", description: e.message, variant: "destructive" })
     }
   }
@@ -121,6 +151,7 @@ export default function WebsiteManagement() {
   }
 
   if (!activeBiz) return null
+  const websiteQuotaBlocked = isUsageExhausted(usage, "websiteGenerations")
 
   // ── GENERATING ──────────────────────────────────────────────────────────────
   if (isGenerating) {
@@ -313,9 +344,14 @@ export default function WebsiteManagement() {
               </div>
             </div>
 
-            <Button size="lg" className="w-full gap-2 h-12 text-base" onClick={handleGenerate}>
+            <Button size="lg" className="w-full gap-2 h-12 text-base" onClick={handleGenerate} disabled={websiteQuotaBlocked}>
               <Sparkles size={18} /> Generate Website
             </Button>
+            {websiteQuotaBlocked && (
+              <p className="text-xs text-center text-destructive">
+                Website limit reached. <Link href="/dashboard/settings?tab=billing" className="font-semibold underline">Upgrade plan</Link>
+              </p>
+            )}
           </CardContent>
         </Card>
 

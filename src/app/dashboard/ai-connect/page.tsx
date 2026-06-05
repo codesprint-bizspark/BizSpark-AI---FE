@@ -1,13 +1,16 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Bot, Check, Copy, Key, Loader2, Plus, Trash2, RefreshCw } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { ToastAction } from "@/components/ui/toast"
 import { useToast } from "@/hooks/use-toast"
 import { apiClient } from "@/lib/api-client"
+import { isQuotaError, quotaErrorDescription } from "@/lib/usage"
 
 const MCP_SERVER_URL = process.env.NEXT_PUBLIC_MCP_URL || "http://localhost:3006"
 
@@ -35,6 +38,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 }
 
 export default function AiConnectPage() {
+  const router = useRouter()
   const { toast } = useToast()
   const [bizId, setBizId] = useState("")
   const [keys, setKeys] = useState<ApiKey[]>([])
@@ -71,6 +75,19 @@ export default function AiConnectPage() {
       await loadKeys(bizId)
       toast({ title: "API key created", description: "Copy it now — it won't be shown again." })
     } catch (e: any) {
+      if (isQuotaError(e)) {
+        toast({
+          title: "Plan limit reached",
+          description: quotaErrorDescription(e),
+          variant: "destructive",
+          action: (
+            <ToastAction altText="Open billing" onClick={() => router.push("/dashboard/settings?tab=billing")}>
+              Upgrade
+            </ToastAction>
+          ),
+        })
+        return
+      }
       toast({ title: "Failed to generate key", description: e.message, variant: "destructive" })
     } finally {
       setGenerating(false)
