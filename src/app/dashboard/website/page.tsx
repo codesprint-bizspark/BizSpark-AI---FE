@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils"
 import { apiClient } from "@/lib/api-client"
 import { useToast } from "@/hooks/use-toast"
 import { isQuotaError, isUsageExhausted, quotaErrorDescription, usageApi, type UsageSnapshot } from "@/lib/usage"
+import { StoreAddressCard } from "./store-address-card"
 
 const TONES = [
   { value: "professional", label: "Professional", emoji: "💼" },
@@ -256,6 +257,12 @@ export default function WebsiteManagement() {
             </a>
           </Button>
         </div>
+
+        <StoreAddressCard
+          businessId={activeBiz.id}
+          initialSlug={activeBiz.slug}
+          baseDomain={process.env.NEXT_PUBLIC_BASE_DOMAIN || "bizspark.online"}
+        />
 
         <Card className="border-2 border-amber-200 bg-amber-50">
           <CardHeader className="pb-3 pt-5 px-5">
