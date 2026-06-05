@@ -15,8 +15,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ToastAction } from "@/components/ui/toast"
 import { useToast } from "@/hooks/use-toast"
 import { apiClient } from "@/lib/api-client"
+import { isQuotaError, quotaErrorDescription } from "@/lib/usage"
 
 const CATEGORIES = [
   "Restaurant / Café",
@@ -90,6 +92,19 @@ export function CreateBusinessDialog({ open, onOpenChange }: Props) {
 
       setSuccess({ businessName: form.name.trim() })
     } catch (error: any) {
+      if (isQuotaError(error)) {
+        toast({
+          title: "Plan limit reached",
+          description: quotaErrorDescription(error),
+          variant: "destructive",
+          action: (
+            <ToastAction altText="Open billing" onClick={() => { window.location.href = "/dashboard/settings?tab=billing" }}>
+              Upgrade
+            </ToastAction>
+          ),
+        })
+        return
+      }
       toast({ title: "Could not create business", description: error.message || "Unexpected error.", variant: "destructive" })
     } finally {
       setIsSaving(false)

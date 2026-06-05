@@ -2,13 +2,23 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { User, CreditCard, Check, Loader2, Sparkles } from "lucide-react"
+import { User, CreditCard, Check, Loader2, Sparkles, BarChart3 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { apiClient } from "@/lib/api-client"
+import {
+  formatQuotaNumber,
+  quotaPercent,
+  spentForUsage,
+  usageApi,
+  type MeterQuotaKey,
+  type UsageQuotas,
+  type UsageSnapshot,
+} from "@/lib/usage"
 
 type Plan = {
   id: string
@@ -20,14 +30,70 @@ type Plan = {
   badgeText: string
   isPopular: boolean
   benefits: string[]
+  quotas?: UsageQuotas
 }
 
 type SubStatus = {
   tier: string
+  planId: string | null
   status: string
   planName: string
   expiresAt: string | null
+  effectivePlan?: Plan
+  quotas?: UsageQuotas
+  usageSummary?: Pick<UsageSnapshot, "month" | "resetAt" | "usage" | "remaining">
 } | null
+
+const USAGE_METERS: Array<{ key: MeterQuotaKey; label: string }> = [
+  { key: "monthlyTokens", label: "AI tokens" },
+  { key: "websiteGenerations", label: "Websites" },
+  { key: "mobileAppGenerations", label: "Mobile apps" },
+  { key: "socialPostGenerations", label: "Social actions" },
+]
+
+function UsageMeters({ usage }: { usage: UsageSnapshot }) {
+  return (
+    <Card className="border-2">
+      <CardContent className="pt-5 pb-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold flex items-center gap-2">
+              <BarChart3 size={15} className="text-primary" /> Monthly AI usage
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {usage.effectivePlan.name} · resets {new Date(usage.resetAt).toLocaleDateString()}
+            </p>
+          </div>
+          <Badge variant="secondary">{usage.month}</Badge>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          {USAGE_METERS.map(({ key, label }) => {
+            const used = spentForUsage(usage, key)
+            const reserved = usage.usage[key]?.reserved ?? 0
+            const limit = usage.quotas[key]
+            return (
+              <div key={key} className="space-y-1.5">
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <span className="font-semibold">{label}</span>
+                  <span className="text-muted-foreground">
+                    {formatQuotaNumber(used, key)} / {formatQuotaNumber(limit, key)}
+                  </span>
+                </div>
+                <Progress value={quotaPercent(usage, key)} className="h-2" />
+                {reserved > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {formatQuotaNumber(reserved, key)} reserved
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 
 export default function SettingsPage() {
   const { toast } = useToast()
@@ -39,14 +105,16 @@ export default function SettingsPage() {
   const [bizId, setBizId] = useState("")
   const [plans, setPlans] = useState<Plan[]>([])
   const [sub, setSub] = useState<SubStatus>(null)
+  const [usage, setUsage] = useState<UsageSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [subscribingId, setSubscribingId] = useState<string | null>(null)
 
   const load = useCallback(async (id: string) => {
     try {
-      const [plansRes, statusRes] = await Promise.all([
+      const [plansRes, statusRes, usageRes] = await Promise.all([
         apiClient.get(`/subscription-plans`).catch(() => ({ data: [] })),
         apiClient.get(`/billing/status?businessId=${id}`).catch(() => ({ data: null })),
+        usageApi.get().catch(() => null),
       ])
       const rawPlans: Plan[] = plansRes.data ?? plansRes ?? []
       // Dedupe by id (data source may merge old + new plan sets)
@@ -58,6 +126,7 @@ export default function SettingsPage() {
       })
       setPlans(unique)
       setSub(statusRes.data ?? null)
+      setUsage(usageRes)
     } finally {
       setLoading(false)
     }
@@ -163,6 +232,8 @@ export default function SettingsPage() {
       {/* BILLING */}
       {tab === "billing" && (
         <div className="space-y-5">
+          {usage && <UsageMeters usage={usage} />}
+
           {sub && sub.status === "ACTIVE" && (
             <div className="rounded-xl border-2 border-green-200 bg-green-50 px-5 py-4 flex items-center gap-3">
               <Check className="text-green-600" size={20} />
@@ -199,6 +270,20 @@ export default function SettingsPage() {
                         </li>
                       ))}
                     </ul>
+                    {plan.quotas && (
+                      <div className="grid grid-cols-2 gap-1.5 mt-4 text-[11px]">
+                        {[
+                          ["Tokens", formatQuotaNumber(plan.quotas.monthlyTokens, "monthlyTokens")],
+                          ["Websites", formatQuotaNumber(plan.quotas.websiteGenerations)],
+                          ["Apps", formatQuotaNumber(plan.quotas.mobileAppGenerations)],
+                          ["Social", formatQuotaNumber(plan.quotas.socialPostGenerations)],
+                        ].map(([label, value]) => (
+                          <span key={label} className="rounded-md bg-slate-100 px-2 py-1 text-slate-700">
+                            <span className="font-semibold">{value}</span> {label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <Button
                       onClick={() => subscribe(plan.id)}
                       disabled={!!subscribingId || isCurrent}

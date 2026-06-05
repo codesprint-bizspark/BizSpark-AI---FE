@@ -1,6 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   AlertTriangle,
   CheckCircle2,
@@ -14,11 +16,13 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ToastAction } from "@/components/ui/toast"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { apiClient } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
+import { isQuotaError, isUsageExhausted, quotaErrorDescription, usageApi, type UsageSnapshot } from "@/lib/usage"
 
 type Location = {
   name: string
@@ -49,6 +53,7 @@ const statusTone: Record<Review["status"], string> = {
 }
 
 export default function GoogleReviewsPage() {
+  const router = useRouter()
   const { toast } = useToast()
   const [businessId, setBusinessId] = useState<string | null>(null)
   const [provider, setProvider] = useState("mock")
@@ -60,6 +65,20 @@ export default function GoogleReviewsPage() {
   const [syncing, setSyncing] = useState(false)
   const [approvingId, setApprovingId] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [usage, setUsage] = useState<UsageSnapshot | null>(null)
+
+  const showQuotaToast = (description: string) => {
+    toast({
+      title: "Plan limit reached",
+      description,
+      variant: "destructive",
+      action: (
+        <ToastAction altText="Open billing" onClick={() => router.push("/dashboard/settings?tab=billing")}>
+          Upgrade
+        </ToastAction>
+      ),
+    })
+  }
 
   const pendingAiCount = useMemo(
     () => reviews.filter(review => review.status === "AI_PENDING").length,
@@ -85,6 +104,7 @@ export default function GoogleReviewsPage() {
     setBusinessId(id)
     setLoading(true)
     try {
+      usageApi.get().then(setUsage).catch(() => undefined)
       const status = await apiClient.get(`/google-business/status?businessId=${id}`)
       setConnected(Boolean(status.connected))
       setProvider(status.provider || "mock")
@@ -144,12 +164,22 @@ export default function GoogleReviewsPage() {
 
   const syncReviews = async () => {
     if (!businessId) return
+    if (isUsageExhausted(usage, "socialPostGenerations")) {
+      showQuotaToast("Social action limit reached. Upgrade in Plans & Billing to continue.")
+      return
+    }
     setSyncing(true)
     try {
       await apiClient.post("/google-business/reviews/sync", { businessId })
       await loadReviews(businessId)
+      usageApi.get().then(setUsage).catch(() => undefined)
       toast({ title: "Reviews synced", description: "AI reply tasks have been queued." })
     } catch (error: any) {
+      if (isQuotaError(error)) {
+        showQuotaToast(quotaErrorDescription(error))
+        usageApi.get().then(setUsage).catch(() => undefined)
+        return
+      }
       toast({ title: "Sync failed", description: error.message, variant: "destructive" })
     } finally {
       setSyncing(false)
@@ -179,6 +209,8 @@ export default function GoogleReviewsPage() {
       </div>
     )
   }
+
+  const socialQuotaBlocked = isUsageExhausted(usage, "socialPostGenerations")
 
   return (
     <div className="space-y-6">
@@ -223,7 +255,7 @@ export default function GoogleReviewsPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button onClick={syncReviews} disabled={!locationName || syncing} className="gap-2">
+                <Button onClick={syncReviews} disabled={!locationName || syncing || socialQuotaBlocked} className="gap-2">
                   {syncing ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
                   Sync Reviews
                 </Button>
@@ -232,6 +264,12 @@ export default function GoogleReviewsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {connected && socialQuotaBlocked && (
+        <p className="text-xs text-destructive">
+          Social action limit reached. <Link href="/dashboard/settings?tab=billing" className="font-semibold underline">Upgrade plan</Link>
+        </p>
+      )}
 
       {locationName && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
