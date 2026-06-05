@@ -1,5 +1,20 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
 
+export type ApiClientError = Error & {
+    status?: number;
+    code?: string;
+    details?: Record<string, any>;
+};
+
+function buildApiError(response: Response, errorData: Record<string, any>, fallback: string): ApiClientError {
+    const message = errorData.message || fallback;
+    const error = new Error(message) as ApiClientError;
+    error.status = response.status;
+    error.code = errorData.code;
+    error.details = errorData;
+    return error;
+}
+
 export const apiClient = {
     getAuthToken: () => {
         if (typeof window !== 'undefined') {
@@ -44,7 +59,7 @@ export const apiClient = {
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || 'An error occurred during the request');
+            throw buildApiError(response, errorData, 'An error occurred during the request');
         }
 
         // Best-effort JSON parse — DELETE may return empty body
@@ -92,5 +107,36 @@ export const apiClient = {
         return this.request(endpoint, {
             method: 'GET',
         });
-    }
+    },
+
+    async uploadFile(endpoint: string, file: File) {
+        const token = this.getAuthToken();
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+            method: 'POST',
+            headers,
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw buildApiError(response, errorData, 'Upload failed');
+        }
+
+        const text = await response.text();
+        return text ? JSON.parse(text) : {};
+    },
+
+    async getWebsiteConfig(businessId: string) {
+        return this.get(`/business/${businessId}/website/config`);
+    },
+
+    async patchWebsiteConfig(businessId: string, payload: Record<string, unknown>) {
+        return this.patch(`/business/${businessId}/website/config`, payload);
+    },
 };
