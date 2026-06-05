@@ -215,7 +215,12 @@ export default function WebsiteManagement() {
   // ── PUBLISHED ────────────────────────────────────────────────────────────────
   if (isPublished) {
     const commerceBase = (process.env.NEXT_PUBLIC_COMMERCE_WEB_URL || process.env.NEXT_PUBLIC_COMMERCE_URL || 'http://localhost:3004').replace(/\/$/, '')
-    const storefrontUrl = `${commerceBase}/?tenant=${activeBiz.id}`
+    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'bizspark.online'
+    // Once the business has claimed a subdomain, show that as the live URL
+    // (e.g. kalu.bizspark.online); otherwise fall back to the shared store host.
+    const storefrontUrl = activeBiz.slug
+      ? `https://${activeBiz.slug}.${baseDomain}`
+      : `${commerceBase}/?tenant=${activeBiz.id}`
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -272,7 +277,7 @@ export default function WebsiteManagement() {
             {adminCredentials ? (
               <>
                 {[
-                  { label: "Login URL", value: `${commerceBase}/auth?tenant=${activeBiz.id}` },
+                  { label: "Login URL", value: activeBiz.slug ? `https://${activeBiz.slug}.${baseDomain}/auth` : `${commerceBase}/auth?tenant=${activeBiz.id}` },
                   { label: "Email",     value: adminCredentials.email },
                   { label: "Password",  value: adminCredentials.password },
                 ].map(row => (
