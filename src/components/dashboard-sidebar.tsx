@@ -39,6 +39,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { apiClient } from "@/lib/api-client"
+import { usageApi } from "@/lib/usage"
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Overview", href: "/dashboard" },
@@ -71,6 +72,9 @@ export function DashboardSidebar() {
     if (activeId) {
       apiClient.get(`/billing/status?businessId=${activeId}`)
         .then((res) => { if (res?.data?.planName) setPlanName(res.data.planName) })
+        .catch(() => {})
+      usageApi.get()
+        .then((data) => { if (data?.effectivePlan?.name) setPlanName(data.effectivePlan.name) })
         .catch(() => {})
     }
   }, [])

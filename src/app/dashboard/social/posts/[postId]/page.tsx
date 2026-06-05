@@ -25,12 +25,14 @@ import {
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { ToastAction } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { socialApi } from "@/lib/social/api"
 import { SocialAccount, SocialPost, PLATFORM_META } from "@/lib/social/types"
 import { MediaUploader } from "@/components/social/media-uploader"
 import { type LocalMedia } from "@/lib/social/media-utils"
+import { isQuotaError, isUsageExhausted, quotaErrorDescription, usageApi, type UsageSnapshot } from "@/lib/usage"
 
 export default function SocialPostDetailPage() {
   const params = useParams<{ postId: string }>()
@@ -52,6 +54,20 @@ export default function SocialPostDetailPage() {
   const [showUploader, setShowUploader] = useState(false)
   const [stagedUploads, setStagedUploads] = useState<LocalMedia[]>([])
   const [isUploading, setIsUploading] = useState(false)
+  const [usage, setUsage] = useState<UsageSnapshot | null>(null)
+
+  const showQuotaToast = (description: string) => {
+    toast({
+      title: "Plan limit reached",
+      description,
+      variant: "destructive",
+      action: (
+        <ToastAction altText="Open billing" onClick={() => router.push("/dashboard/settings?tab=billing")}>
+          Upgrade
+        </ToastAction>
+      ),
+    })
+  }
 
   useEffect(() => { setActiveBizId(localStorage.getItem("active_biz_id") || "") }, [])
 
@@ -59,12 +75,14 @@ export default function SocialPostDetailPage() {
     if (!activeBizId || !params?.postId) return
     setIsLoading(true)
     try {
-      const [p, accts] = await Promise.all([
+      const [p, accts, usageRes] = await Promise.all([
         socialApi.getPost(activeBizId, params.postId),
         socialApi.listAccounts(activeBizId),
+        usageApi.get().catch(() => null),
       ])
       setPost(p)
       setAccounts(accts)
+      setUsage(usageRes)
       if (p.scheduledAt) {
         // Format to value compatible with <input type="datetime-local">
         const d = new Date(p.scheduledAt)
@@ -103,12 +121,22 @@ export default function SocialPostDetailPage() {
 
   const handleRegenerate = async (field: 'caption' | 'hashtags' | 'cta' | 'image_prompt' | 'flyer_prompt' | 'video_script', instructions?: string) => {
     if (!post) return
+    if (isUsageExhausted(usage, "socialPostGenerations")) {
+      showQuotaToast("Social action limit reached. Upgrade in Plans & Billing to continue.")
+      return
+    }
     setRegenField(field)
     try {
       const updated = await socialApi.regenerateField(activeBizId, post.id, { field, instructions })
       setPost(updated)
+      usageApi.get().then(setUsage).catch(() => undefined)
       toast({ title: "Regenerated" })
     } catch (e: any) {
+      if (isQuotaError(e)) {
+        showQuotaToast(quotaErrorDescription(e))
+        usageApi.get().then(setUsage).catch(() => undefined)
+        return
+      }
       toast({ title: "Regenerate failed", description: e.message, variant: "destructive" })
     } finally {
       setRegenField(null)
@@ -117,12 +145,21 @@ export default function SocialPostDetailPage() {
 
   const handleAiImage = async () => {
     if (!post) return
+    if (isUsageExhausted(usage, "socialPostGenerations")) {
+      showQuotaToast("Social action limit reached. Upgrade in Plans & Billing to continue.")
+      return
+    }
     setIsAttachingMedia(true)
     try {
       await socialApi.generateAiImage(activeBizId, post.id)
       await reload()
       toast({ title: "Image generated" })
     } catch (e: any) {
+      if (isQuotaError(e)) {
+        showQuotaToast(quotaErrorDescription(e))
+        usageApi.get().then(setUsage).catch(() => undefined)
+        return
+      }
       toast({ title: "Image gen failed", description: e.message, variant: "destructive" })
     } finally {
       setIsAttachingMedia(false)
@@ -305,6 +342,7 @@ export default function SocialPostDetailPage() {
   const isLocked = isPublished || post.status === "PUBLISHING"
   const isTikTok = post.platform === "TIKTOK"
   const aiMeta = (post.aiMetadata ?? {}) as Record<string, any>
+  const socialQuotaBlocked = isUsageExhausted(usage, "socialPostGenerations")
 
   return (
     <div className="space-y-6">
@@ -344,6 +382,14 @@ export default function SocialPostDetailPage() {
         </Card>
       )}
 
+      {!isLocked && socialQuotaBlocked && (
+        <Card className="border-2 border-destructive/30 bg-destructive/5">
+          <CardContent className="pt-4 pb-4 text-sm text-destructive">
+            Social action limit reached. <Link href="/dashboard/settings?tab=billing" className="font-semibold underline">Upgrade plan</Link>
+          </CardContent>
+        </Card>
+      )}
+
       {post.status === "FAILED" && post.lastError && (
         <Card className="border-2 border-red-300 bg-red-50">
           <CardContent className="pt-4 pb-4 flex items-start gap-3">
@@ -374,7 +420,7 @@ export default function SocialPostDetailPage() {
             <CardContent className="pt-5 pb-5 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Caption</p>
-                <Button variant="ghost" size="sm" disabled={isLocked || regenField === 'caption'} onClick={() => handleRegenerate('caption')} className="gap-1 text-xs">
+                <Button variant="ghost" size="sm" disabled={isLocked || socialQuotaBlocked || regenField === 'caption'} onClick={() => handleRegenerate('caption')} className="gap-1 text-xs">
                   {regenField === 'caption' ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Regenerate
                 </Button>
               </div>
@@ -394,7 +440,7 @@ export default function SocialPostDetailPage() {
               <CardContent className="pt-5 pb-5 space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Hashtags</p>
-                  <Button variant="ghost" size="sm" disabled={isLocked || regenField === 'hashtags'} onClick={() => handleRegenerate('hashtags')} className="gap-1 text-xs">
+                  <Button variant="ghost" size="sm" disabled={isLocked || socialQuotaBlocked || regenField === 'hashtags'} onClick={() => handleRegenerate('hashtags')} className="gap-1 text-xs">
                     {regenField === 'hashtags' ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} New set
                   </Button>
                 </div>
@@ -417,7 +463,7 @@ export default function SocialPostDetailPage() {
               <CardContent className="pt-5 pb-5 space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Call to action</p>
-                  <Button variant="ghost" size="sm" disabled={isLocked || regenField === 'cta'} onClick={() => handleRegenerate('cta')} className="gap-1 text-xs">
+                  <Button variant="ghost" size="sm" disabled={isLocked || socialQuotaBlocked || regenField === 'cta'} onClick={() => handleRegenerate('cta')} className="gap-1 text-xs">
                     {regenField === 'cta' ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Rewrite
                   </Button>
                 </div>
@@ -451,7 +497,7 @@ export default function SocialPostDetailPage() {
                     <ImageIcon size={12} /> Attach URL
                   </Button>
                   {(post.postType === 'IMAGE' || post.postType === 'FLYER') && (
-                    <Button variant="default" size="sm" onClick={handleAiImage} disabled={isAttachingMedia || isLocked} className="gap-1.5 text-xs">
+                    <Button variant="default" size="sm" onClick={handleAiImage} disabled={isAttachingMedia || isLocked || socialQuotaBlocked} className="gap-1.5 text-xs">
                       {isAttachingMedia ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />} AI image
                     </Button>
                   )}

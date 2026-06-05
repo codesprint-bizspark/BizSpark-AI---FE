@@ -6,10 +6,12 @@ import { useRouter } from "next/navigation"
 import { Sparkles, Loader2, ImageIcon, Type, FileImage, Video, Wand2, Check, AlertCircle, RefreshCw, Upload } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { ToastAction } from "@/components/ui/toast"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { socialApi } from "@/lib/social/api"
 import { apiClient } from "@/lib/api-client"
+import { isQuotaError, isUsageExhausted, quotaErrorDescription, usageApi, type UsageSnapshot } from "@/lib/usage"
 import { SocialPlatform, SocialPostType, PLATFORM_META } from "@/lib/social/types"
 import { useSocialAccounts } from "@/lib/social/use-social-accounts"
 import { SocialSubNav } from "../sub-nav"
@@ -40,8 +42,25 @@ export default function GenerateSocialContentPage() {
   // `generateMedia` — uploads still go through even when AI image gen is off.
   const [uploadedMedia, setUploadedMedia] = useState<LocalMedia[]>([])
   const [isUploading, setIsUploading] = useState(false)
+  const [usage, setUsage] = useState<UsageSnapshot | null>(null)
 
-  useEffect(() => { setActiveBizId(localStorage.getItem("active_biz_id") || "") }, [])
+  const showQuotaToast = (description: string) => {
+    toast({
+      title: "Plan limit reached",
+      description,
+      variant: "destructive",
+      action: (
+        <ToastAction altText="Open billing" onClick={() => router.push("/dashboard/settings?tab=billing")}>
+          Upgrade
+        </ToastAction>
+      ),
+    })
+  }
+
+  useEffect(() => {
+    setActiveBizId(localStorage.getItem("active_biz_id") || "")
+    usageApi.get().then(setUsage).catch(() => undefined)
+  }, [])
 
   // Shared hook: handles fetch + auto-refresh on window-focus / visibility, so
   // connecting in another tab (or coming back from the OAuth popup) syncs here.
@@ -131,6 +150,10 @@ export default function GenerateSocialContentPage() {
       toast({ title: "Pick at least one platform", variant: "destructive" })
       return
     }
+    if (isUsageExhausted(usage, "socialPostGenerations", platforms.length)) {
+      showQuotaToast("Social generation limit reached. Upgrade in Plans & Billing to continue.")
+      return
+    }
     // Defense-in-depth: re-fetch fresh state before generating, in case the user
     // disconnected an account in another tab since the last focus event.
     const fresh = await refetchAccounts()
@@ -201,8 +224,14 @@ export default function GenerateSocialContentPage() {
         generateMedia,
         userMedia,
       })
+      usageApi.get().then(setUsage).catch(() => undefined)
       await pollUntilDone(taskId)
     } catch (e: any) {
+      if (isQuotaError(e)) {
+        showQuotaToast(quotaErrorDescription(e))
+        usageApi.get().then(setUsage).catch(() => undefined)
+        return
+      }
       toast({ title: "Generation failed", description: e.message, variant: "destructive" })
     } finally {
       timers.forEach(clearTimeout)
@@ -212,6 +241,7 @@ export default function GenerateSocialContentPage() {
   }
 
   if (!activeBizId) return null
+  const socialQuotaBlocked = isUsageExhausted(usage, "socialPostGenerations", Math.max(1, platforms.length))
 
   return (
     <div className="space-y-8 max-w-4xl">
@@ -500,10 +530,15 @@ export default function GenerateSocialContentPage() {
               size="lg"
               className="w-full sm:w-auto gap-2 h-12 text-base px-8"
               onClick={handleGenerate}
-              disabled={platforms.length === 0}
+              disabled={platforms.length === 0 || socialQuotaBlocked}
             >
               <Sparkles size={18} /> Generate {platforms.length || ""} Draft{platforms.length === 1 ? "" : "s"}
             </Button>
+          )}
+          {!isGenerating && socialQuotaBlocked && (
+            <p className="text-xs text-destructive">
+              Social action limit reached. <Link href="/dashboard/settings?tab=billing" className="font-semibold underline">Upgrade plan</Link>
+            </p>
           )}
           {!isGenerating && platforms.length > 0 && (
             <p className="text-xs text-muted-foreground">
