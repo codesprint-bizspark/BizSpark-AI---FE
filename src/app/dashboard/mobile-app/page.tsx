@@ -624,7 +624,7 @@ export default function MobileAppManagement() {
     const deepLink = `${appScheme}://?tenant=${activeBiz.id}`
     // QR encodes an https "open" page (scanners can open https, not custom schemes).
     // That page bounces into the app via the deep link, with an install fallback.
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://bizspark.randitha.net"
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://bizspark.online"
     const openUrl = `${origin}/m?tenant=${activeBiz.id}`
     const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(openUrl)}`
 
