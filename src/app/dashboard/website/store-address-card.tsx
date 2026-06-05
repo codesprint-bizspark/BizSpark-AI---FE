@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Globe, Check, Loader2, X, ExternalLink } from "lucide-react"
+import { Globe, Check, Loader2, X } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -83,7 +83,6 @@ export function StoreAddressCard({
     }
   }
 
-  const claimedUrl = claimedSlug ? `https://${claimedSlug}.${baseDomain}` : null
   const canClaim = check?.available && !checking && value.trim() !== claimedSlug
 
   return (
@@ -94,19 +93,6 @@ export function StoreAddressCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="px-5 pb-5 space-y-3">
-        {claimedUrl && (
-          <a
-            href={claimedUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 rounded-lg border-2 border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800 hover:bg-green-100"
-          >
-            <Check size={15} className="text-green-600 shrink-0" />
-            <span className="font-mono truncate flex-1">{claimedUrl}</span>
-            <ExternalLink size={13} className="shrink-0" />
-          </a>
-        )}
-
         <div>
           <p className="text-xs text-muted-foreground mb-1.5">
             {claimedSlug ? "Change your address" : "Pick a custom address for your store"}
