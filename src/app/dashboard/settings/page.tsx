@@ -141,8 +141,22 @@ export default function SettingsPage() {
 
     // Show toast on PayHere return
     const billing = searchParams.get("billing")
-    if (billing === "success") toast({ title: "Payment received", description: "Your subscription is being activated." })
     if (billing === "cancelled") toast({ title: "Payment cancelled", variant: "destructive" })
+    if (billing === "success") {
+      toast({ title: "Payment received", description: "Activating your subscription…" })
+      // The plan activates asynchronously (PayHere notify webhook), so poll for a
+      // bit and broadcast a refresh so this page + the topbar plan badge update
+      // without a manual refresh / re-login.
+      if (!id) return
+      let tries = 0
+      const poll = setInterval(() => {
+        tries += 1
+        load(id)
+        window.dispatchEvent(new Event("bizspark:refresh-plan"))
+        if (tries >= 8) clearInterval(poll)
+      }, 3000)
+      return () => clearInterval(poll)
+    }
   }, [load, searchParams, toast])
 
   const subscribe = async (planId: string) => {

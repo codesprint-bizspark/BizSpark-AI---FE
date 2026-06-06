@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Zap, ArrowRight, CheckCircle2, Globe, Share2, Sparkles, Layout } from "lucide-react"
@@ -8,8 +9,38 @@ import { Card, CardContent } from "@/components/ui/card"
 import { PlaceHolderImages } from "@/lib/placeholder-images"
 import { cn } from "@/lib/utils"
 
+// Fallback shown until the live plans load (matches the dashboard's default plans).
+type PricingPlan = { name: string; price: string; featured?: boolean; features: string[] }
+const FALLBACK_PLANS: PricingPlan[] = [
+  { name: "Starter", price: "$10", features: ["3 Businesses", "3 Website generations", "Facebook connection", "15 Post generations", "2 AI Connect (MCP) keys"] },
+  { name: "Growth", price: "$20", featured: true, features: ["3 Businesses", "3 Mobile app generations", "All social platforms (FB, IG, TikTok)", "40 Post generations", "3 AI Connect (MCP) keys"] },
+  { name: "Pro", price: "$50", features: ["5 Businesses", "6 Website generations", "6 Mobile app generations", "100 Post generations", "5 AI Connect (MCP) keys"] },
+  { name: "Business", price: "$100", features: ["Run multiple businesses at scale", "Highest generation limits"] },
+]
+
 export default function LandingPage() {
   const heroImage = PlaceHolderImages.find(img => img.id === "hero-image")
+  // Pull the live plans from the public API so this matches the dashboard exactly.
+  const [plans, setPlans] = useState<PricingPlan[]>(FALLBACK_PLANS)
+
+  useEffect(() => {
+    fetch("/api/subscription-plans")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((res) => {
+        const raw = res?.data
+        if (Array.isArray(raw) && raw.length) {
+          setPlans(
+            raw.map((p: any) => ({
+              name: p.name,
+              price: `$${p.priceMonthly}`,
+              featured: !!p.isPopular,
+              features: Array.isArray(p.benefits) ? p.benefits : [],
+            })),
+          )
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   return (
     <div className="min-h-screen bg-background">
@@ -147,12 +178,8 @@ export default function LandingPage() {
             <h2 className="text-3xl md:text-4xl font-bold font-headline mb-4">Simple, transparent pricing</h2>
             <p className="text-muted-foreground">Start free, upgrade when you spark.</p>
           </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { name: "Starter", price: "$0", features: ["1 AI Website", "2 Social Accounts", "Basic Analytics", "Community Support"] },
-              { name: "Spark Pro", price: "$29", featured: true, features: ["Unlimited AI Websites", "All Social Platforms", "AI Agent Content Manager", "Custom Domain", "Priority Support"] },
-              { name: "Agency", price: "$99", features: ["Manage 10 Businesses", "White-label reports", "API Access", "Dedicated Account Manager"] }
-            ].map((plan, i) => (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {plans.map((plan, i) => (
               <Card key={i} className={cn("relative p-8 border-2 flex flex-col", plan.featured ? "border-primary shadow-xl scale-105 z-10" : "border-border shadow-sm")}>
                 {plan.featured && (
                   <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-primary text-white text-xs font-bold uppercase tracking-widest px-4 py-1 rounded-full">

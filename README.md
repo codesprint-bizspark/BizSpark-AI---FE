@@ -4,7 +4,7 @@ The merchant-facing **SaaS dashboard** for BizSpark AI: generate an AI website, 
 
 Next.js (App Router) + React + Tailwind. Talks to the NestJS backend (`Bizpark--AI-BE`).
 
-**Live:** <https://bizspark.randitha.net> · **API:** same origin at `/api`
+**Live:** <https://bizspark.online> · **API:** same origin at `/api`
 
 ---
 
@@ -12,7 +12,7 @@ Next.js (App Router) + React + Tailwind. Talks to the NestJS backend (`Bizpark--
 
 - **Next.js** (App Router, `output: 'standalone'`) + **React** + **TypeScript**
 - **Tailwind CSS** + shadcn/ui components
-- Deployed as a **container** (`ghcr.io/codesprint-bizspark/bizpark-frontend`) on K3s, served at the apex `bizspark.randitha.net/` with the API on the same origin (`/api`).
+- Deployed as a **container** (`ghcr.io/codesprint-bizspark/bizpark-frontend`) on K3s, served at the apex `bizspark.online/` with the API on the same origin (`/api`).
 
 ## Key pages (`src/app/dashboard/`)
 
@@ -39,7 +39,7 @@ Create `.env.local` for the public (build-time) config:
 ```bash
 NEXT_PUBLIC_API_URL=/api
 NEXT_PUBLIC_COMMERCE_URL=http://localhost:3003
-NEXT_PUBLIC_STOREFRONT_URL=http://localhost:3004
+NEXT_PUBLIC_COMMERCE_WEB_URL=http://localhost:3004
 NEXT_PUBLIC_MCP_URL=http://localhost:3005
 ```
 
@@ -50,9 +50,9 @@ This is a Next.js **standalone** build, so all `NEXT_PUBLIC_*` values are **bake
 | Variable | Prod value | Used for |
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | `/api` | backend API (same origin) |
-| `NEXT_PUBLIC_COMMERCE_URL` | `https://commerce.randitha.net` | commerce/storefront API |
-| `NEXT_PUBLIC_STOREFRONT_URL` | `https://store.randitha.net` | "View storefront" link |
-| `NEXT_PUBLIC_MCP_URL` | `https://admin.randitha.net` | AI Connect (MCP) base; `/sse` desktop, `/mcp` web |
+| `NEXT_PUBLIC_COMMERCE_URL` | `https://commerce.bizspark.online` | commerce/storefront API |
+| `NEXT_PUBLIC_COMMERCE_WEB_URL` | `https://store.bizspark.online` | "View storefront" link |
+| `NEXT_PUBLIC_MCP_URL` | `https://admin.bizspark.online` | AI Connect (MCP) base; `/sse` desktop, `/mcp` web |
 | `NEXT_PUBLIC_MOBILE_INSTALL_URL` / `_SCHEME` | EAS build URL / `bizpark` | mobile QR install + deep link |
 
 ## Build & deploy
@@ -63,8 +63,9 @@ CI (`.github/workflows/`) builds `bizpark-frontend` on push to `main`, passing t
 # build locally (standalone)
 docker build -t bizpark-frontend \
   --build-arg NEXT_PUBLIC_API_URL=/api \
-  --build-arg NEXT_PUBLIC_COMMERCE_URL=https://commerce.randitha.net \
-  --build-arg NEXT_PUBLIC_MCP_URL=https://admin.randitha.net .
+  --build-arg NEXT_PUBLIC_COMMERCE_URL=https://commerce.bizspark.online \
+  --build-arg NEXT_PUBLIC_COMMERCE_WEB_URL=https://store.bizspark.online \
+  --build-arg NEXT_PUBLIC_MCP_URL=https://admin.bizspark.online .
 ```
 
 ## Related repos
