@@ -359,7 +359,7 @@ export default function MobileAppManagement() {
                 </div>
 
                 {/* Target stores */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="rounded-xl border-2 border-dashed p-4 flex items-center gap-3">
                     <div className="size-11 rounded-lg bg-white border flex items-center justify-center shrink-0">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -769,7 +769,7 @@ export default function MobileAppManagement() {
           <CardContent className="pt-6 space-y-6">
             <div>
               <p className="text-sm font-semibold mb-3">App tone</p>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {TONES.map(t => (
                   <button key={t.value} type="button" onClick={() => setTone(t.value)}
                     className={cn(

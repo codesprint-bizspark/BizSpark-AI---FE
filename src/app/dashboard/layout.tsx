@@ -94,13 +94,13 @@ export default function DashboardLayout({
       <DashboardSidebar />
       <SidebarInset className="bg-background">
         <div className="flex flex-col h-full min-h-screen">
-          <header className="h-16 border-b bg-card px-8 flex items-center justify-between sticky top-0 z-30">
-            <div className="flex items-center gap-6">
+          <header className="h-16 border-b bg-card px-4 md:px-8 flex items-center justify-between gap-2 sticky top-0 z-30">
+            <div className="flex items-center gap-3 md:gap-6 min-w-0">
               <h1 className="font-semibold text-lg hidden md:block">Dashboard</h1>
               {businesses.length > 0 && (
                 <div className="flex items-center gap-2">
                   <Select value={activeId} onValueChange={handleSwitch}>
-                    <SelectTrigger className="w-[240px] h-10 bg-slate-50 border-slate-200 hover:bg-slate-100 transition-colors">
+                    <SelectTrigger className="w-[150px] sm:w-[240px] h-10 bg-slate-50 border-slate-200 hover:bg-slate-100 transition-colors">
                       <div className="flex items-center gap-2 truncate">
                         <div className="size-6 rounded bg-primary/10 flex items-center justify-center">
                           <Building2 size={12} className="text-primary" />
@@ -128,7 +128,7 @@ export default function DashboardLayout({
             </div>
             <DashboardTopbarActions />
           </header>
-          <main className="flex-1 overflow-auto p-8">
+          <main className="flex-1 overflow-auto p-4 md:p-8">
             {businesses.length === 0 ? (
               <div className="h-full min-h-[60vh] flex flex-col items-center justify-center text-center px-6">
                 <div className="size-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">

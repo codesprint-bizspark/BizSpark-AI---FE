@@ -43,7 +43,7 @@ export default function LandingPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold tracking-wider uppercase">
               <span className="flex items-center gap-1"><Sparkles className="size-3" /> The Future of Small Business</span>
             </div>
-            <h1 className="text-5xl md:text-6xl font-bold font-headline leading-tight text-slate-900">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold font-headline leading-tight text-slate-900">
               Your AI Website & Social Media Manager
             </h1>
             <p className="text-xl text-muted-foreground max-w-lg">
