@@ -14,7 +14,6 @@ type PricingPlan = { name: string; price: string; featured?: boolean; features: 
 const FALLBACK_PLANS: PricingPlan[] = [
   { name: "Starter", price: "$10", features: ["3 Businesses", "3 Website generations", "Facebook connection", "15 Post generations", "2 AI Connect (MCP) keys"] },
   { name: "Growth", price: "$20", featured: true, features: ["3 Businesses", "3 Mobile app generations", "All social platforms (FB, IG, TikTok)", "40 Post generations", "3 AI Connect (MCP) keys"] },
-  { name: "Pro", price: "$50", features: ["5 Businesses", "6 Website generations", "6 Mobile app generations", "100 Post generations", "5 AI Connect (MCP) keys"] },
   { name: "Business", price: "$100", features: ["Run multiple businesses at scale", "Highest generation limits"] },
 ]
 
@@ -27,10 +26,14 @@ export default function LandingPage() {
     fetch("/api/subscription-plans")
       .then((r) => (r.ok ? r.json() : null))
       .then((res) => {
-        const raw = res?.data
+        const raw: any[] = res?.data
         if (Array.isArray(raw) && raw.length) {
+          // Dedupe by id — the plan source can merge old + new sets (e.g. a
+          // duplicate "growth"); show each plan once, matching the dashboard.
+          const seen = new Set<string>()
+          const unique = raw.filter((p) => (seen.has(p?.id) ? false : (seen.add(p?.id), true)))
           setPlans(
-            raw.map((p: any) => ({
+            unique.map((p: any) => ({
               name: p.name,
               price: `$${p.priceMonthly}`,
               featured: !!p.isPopular,
@@ -178,7 +181,7 @@ export default function LandingPage() {
             <h2 className="text-3xl md:text-4xl font-bold font-headline mb-4">Simple, transparent pricing</h2>
             <p className="text-muted-foreground">Start free, upgrade when you spark.</p>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
             {plans.map((plan, i) => (
               <Card key={i} className={cn("relative p-8 border-2 flex flex-col", plan.featured ? "border-primary shadow-xl scale-105 z-10" : "border-border shadow-sm")}>
                 {plan.featured && (
