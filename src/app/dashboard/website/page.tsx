@@ -267,6 +267,7 @@ export default function WebsiteManagement() {
           businessId={activeBiz.id}
           initialSlug={activeBiz.slug}
           baseDomain={process.env.NEXT_PUBLIC_BASE_DOMAIN || "bizspark.online"}
+          onClaimed={(slug) => setActiveBiz((prev: any) => ({ ...prev, slug }))}
         />
 
         <Card className="border-2 border-amber-200 bg-amber-50">

@@ -24,10 +24,12 @@ export function StoreAddressCard({
   businessId,
   initialSlug,
   baseDomain,
+  onClaimed,
 }: {
   businessId: string
   initialSlug?: string | null
   baseDomain: string
+  onClaimed?: (slug: string) => void
 }) {
   const [value, setValue] = useState(initialSlug ?? "")
   const [claimedSlug, setClaimedSlug] = useState<string | null>(initialSlug ?? null)
@@ -76,6 +78,7 @@ export function StoreAddressCard({
       setClaimedSlug(res.slug)
       setValue(res.slug)
       setCheck(null)
+      onClaimed?.(res.slug)
     } catch (e: any) {
       setError(e?.message || "Could not claim this address")
     } finally {
