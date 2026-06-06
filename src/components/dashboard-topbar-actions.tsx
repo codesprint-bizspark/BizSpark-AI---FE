@@ -79,16 +79,30 @@ export function DashboardTopbarActions() {
     const id = localStorage.getItem("active_biz_id") || ""
     setBizId(id)
     if (!id) return
-    apiClient.get(`/billing/status?businessId=${id}`)
-      .then((res) => { if (res?.data?.planName) setPlanName(res.data.planName) })
-      .catch(() => {})
-    usageApi.get()
-      .then((data) => {
-        setUsage(data)
-        if (data?.effectivePlan?.name) setPlanName(data.effectivePlan.name)
-      })
-      .catch(() => {})
-    loadNotices(id)
+
+    const refresh = () => {
+      apiClient.get(`/billing/status?businessId=${id}`)
+        .then((res) => { if (res?.data?.planName) setPlanName(res.data.planName) })
+        .catch(() => {})
+      usageApi.get()
+        .then((data) => {
+          setUsage(data)
+          if (data?.effectivePlan?.name) setPlanName(data.effectivePlan.name)
+        })
+        .catch(() => {})
+      loadNotices(id)
+    }
+
+    refresh()
+    // Re-fetch when the tab regains focus (e.g. returning from the PayHere
+    // checkout) or when the billing page broadcasts an upgrade, so a plan change
+    // reflects without a manual refresh / re-login.
+    window.addEventListener("focus", refresh)
+    window.addEventListener("bizspark:refresh-plan", refresh)
+    return () => {
+      window.removeEventListener("focus", refresh)
+      window.removeEventListener("bizspark:refresh-plan", refresh)
+    }
   }, [loadNotices])
 
   const tokenPercent = usage ? quotaPercent(usage, "monthlyTokens") : 0
