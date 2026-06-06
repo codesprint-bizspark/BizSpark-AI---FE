@@ -331,7 +331,7 @@ export default function WebsiteManagement() {
           <CardContent className="pt-6 space-y-6">
             <div>
               <p className="text-sm font-semibold mb-3">Writing tone</p>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {TONES.map(t => (
                   <button key={t.value} type="button" onClick={() => setTone(t.value)}
                     className={cn(
